@@ -14,6 +14,19 @@ interface Vulnerability {
   endpoint_id?: string;
 }
 
+interface RiskScore {
+  score: number;
+  grade: string;
+  recommendation: string;
+  exposure_factor: number;
+}
+
+interface AttackChain {
+  description: string;
+  chain_length: number;
+  vulnerabilities: string[];
+}
+
 interface ReportData {
   vulnerabilities: Vulnerability[];
   report_markdown: string;
@@ -25,6 +38,8 @@ interface ReportData {
     low: number;
     bounty_value: number;
   };
+  risk_score?: RiskScore;
+  attack_chains?: AttackChain[];
 }
 
 const severityBadge: Record<string, string> = {
@@ -32,6 +47,14 @@ const severityBadge: Record<string, string> = {
   high: "bg-[var(--color-high)] text-white",
   medium: "bg-[var(--color-medium)] text-black",
   low: "bg-[var(--color-low)] text-black",
+};
+
+const gradeColor: Record<string, string> = {
+  A: "text-green-400",
+  B: "text-green-300",
+  C: "text-yellow-400",
+  D: "text-orange-400",
+  F: "text-red-400",
 };
 
 export default function ReportPage({ params }: { params: Promise<{ id: string }> }) {
@@ -63,8 +86,32 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
         <h1 className="text-2xl font-bold">
           <span className="text-[var(--color-critical)]">Red</span>Brain Security Report
         </h1>
-        <p className="text-xs text-[var(--color-text-dim)]">Scan ID: {id}</p>
+        <p className="text-xs text-[var(--color-text-dim)]">Scan ID: {id} | AI-Powered Analysis</p>
       </div>
+
+      {/* Risk Score Card */}
+      {report.risk_score && (
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-dim)] mb-2">
+                AI Risk Assessment
+              </h2>
+              <p className="text-xs text-[var(--color-text-dim)] max-w-md">
+                {report.risk_score.recommendation}
+              </p>
+            </div>
+            <div className="text-center">
+              <div className={`text-5xl font-black ${gradeColor[report.risk_score.grade] || "text-gray-400"}`}>
+                {report.risk_score.grade}
+              </div>
+              <div className="text-xs text-[var(--color-text-dim)] mt-1">
+                {report.risk_score.score}/100
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Executive Summary */}
       <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 space-y-4">
@@ -100,6 +147,30 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
           </span>
         </div>
       </div>
+
+      {/* Attack Chains */}
+      {report.attack_chains && report.attack_chains.length > 0 && (
+        <div className="bg-[var(--color-surface)] border border-purple-800/50 rounded-lg p-6 space-y-3">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-purple-400 flex items-center gap-2">
+            <span className="inline-block w-2 h-2 rounded-full bg-purple-400" />
+            AI-Detected Attack Chains
+          </h2>
+          <p className="text-xs text-[var(--color-text-dim)]">
+            Vulnerabilities that can be chained together for escalated impact:
+          </p>
+          <div className="space-y-2">
+            {report.attack_chains.slice(0, 5).map((chain, i) => (
+              <div key={i} className="flex items-center gap-3 p-2 rounded bg-purple-900/20 border border-purple-800/30">
+                <span className="text-[10px] font-bold text-purple-300 w-5">{i + 1}.</span>
+                <span className="text-xs text-[var(--color-text)] flex-1">{chain.description}</span>
+                <span className="text-[10px] text-purple-400">
+                  {chain.chain_length} steps
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Vulnerabilities */}
       <div className="space-y-3">

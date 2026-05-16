@@ -1,13 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+
+interface BrainStats {
+  total_scans: number;
+  embedding_corpus_size: number;
+  gbrain_pages: number;
+  total_patterns: number;
+}
 
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
   const [deployedUrl, setDeployedUrl] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState<BrainStats | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    fetch("/api/brain/knowledge")
+      .then((r) => r.json())
+      .then(setStats)
+      .catch(() => {});
+  }, []);
 
   async function handleScan(e: React.FormEvent) {
     e.preventDefault();
@@ -40,9 +55,14 @@ export default function Home() {
             <span className="cursor-blink ml-1"></span>
           </h1>
           <p className="text-[var(--color-text-dim)] text-sm max-w-md mx-auto">
-            Autonomous AI security engineer. SAST + DAST + threat intel in one
-            brain.
+            Autonomous AI security engineer powered by ZeroEntropy semantic intelligence.
+            SAST + DAST + knowledge graph in one brain.
           </p>
+          <div className="flex items-center justify-center gap-3 text-[9px] text-[var(--color-text-dim)]">
+            <span className="px-2 py-0.5 rounded border border-purple-800/50 text-purple-400">GStack</span>
+            <span className="px-2 py-0.5 rounded border border-blue-800/50 text-blue-400">GBrain</span>
+            <span className="px-2 py-0.5 rounded border border-green-800/50 text-green-400">ZeroEntropy</span>
+          </div>
         </div>
 
         {/* Scan Form */}
@@ -69,7 +89,7 @@ export default function Home() {
                 type="url"
                 value={deployedUrl}
                 onChange={(e) => setDeployedUrl(e.target.value)}
-                placeholder="http://localhost:3000"
+                placeholder="https://benjamin11133-juice-shop.hf.space"
                 required
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] transition-colors"
               />
@@ -81,7 +101,7 @@ export default function Home() {
             disabled={loading}
             className="w-full bg-[var(--color-accent)] text-[var(--color-bg)] font-semibold py-3 rounded-lg text-sm uppercase tracking-wider hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed glow-pulse"
           >
-            {loading ? "[ INITIALIZING... ]" : "[ START SCAN ]"}
+            {loading ? "[ INITIALIZING AI AGENTS... ]" : "[ START AI SCAN ]"}
           </button>
         </form>
 
@@ -89,39 +109,62 @@ export default function Home() {
         <div className="grid grid-cols-3 gap-3">
           {[
             {
-              title: "Reads your code",
-              desc: "Static analysis with 6 vulnerability patterns",
+              title: "Semantic SAST",
+              desc: "AI-powered static analysis with CVE matching via ZeroEntropy embeddings",
+              badge: "zembed-1",
             },
             {
-              title: "Attacks your app",
-              desc: "Dynamic exploitation with targeted payloads",
+              title: "Smart DAST",
+              desc: "Payload ranking and attack chain detection using semantic reranking",
+              badge: "zerank-2",
             },
             {
-              title: "Connects the dots",
-              desc: "Knowledge graph correlates code to exploits",
+              title: "Knowledge Brain",
+              desc: "Self-improving graph that compounds intelligence across scans",
+              badge: "GBrain",
             },
           ].map((f) => (
             <div
               key={f.title}
               className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-2"
             >
-              <h3 className="text-xs font-semibold text-[var(--color-accent)] uppercase">
-                {f.title}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-semibold text-[var(--color-accent)] uppercase">
+                  {f.title}
+                </h3>
+                <span className="text-[8px] px-1.5 py-0.5 rounded bg-[var(--color-bg)] text-[var(--color-text-dim)] border border-[var(--color-border)]">
+                  {f.badge}
+                </span>
+              </div>
               <p className="text-xs text-[var(--color-text-dim)]">{f.desc}</p>
             </div>
           ))}
         </div>
 
-        {/* Stats */}
+        {/* Live Stats */}
         <div className="flex justify-center gap-8 text-xs text-[var(--color-text-dim)]">
           <span>
-            Total scans: <span className="text-[var(--color-text)]">1,247</span>
+            Scans completed:{" "}
+            <span className="text-[var(--color-text)]">{stats?.total_scans ?? "..."}</span>
           </span>
           <span>
-            CVEs in brain:{" "}
-            <span className="text-[var(--color-text)]">12,384</span>
+            Knowledge pages:{" "}
+            <span className="text-[var(--color-text)]">{stats?.gbrain_pages ?? "..."}</span>
           </span>
+          <span>
+            Embeddings:{" "}
+            <span className="text-[var(--color-text)]">{stats?.embedding_corpus_size ?? "..."}</span>
+          </span>
+        </div>
+
+        {/* Navigation */}
+        <div className="flex justify-center">
+          <a
+            href="/brain"
+            className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-accent)] transition-colors underline underline-offset-4"
+          >
+            Explore Brain Graph →
+          </a>
         </div>
       </div>
     </main>

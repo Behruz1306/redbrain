@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from ..core.models import (
     Correlation,
     EndpointInfo,
@@ -21,6 +23,8 @@ class ReportAgent:
         endpoints: list[EndpointInfo],
         correlations: list[Correlation],
         exploit_data: tuple[list[Vulnerability], list[ExploitResult]],
+        attack_chains: list[dict[str, Any]] | None = None,
+        risk_score: dict[str, Any] | None = None,
     ) -> str:
         vulnerabilities, exploits = exploit_data
         func_map = {f.id: f for f in functions}
@@ -29,7 +33,6 @@ class ReportAgent:
         for exp in exploits:
             exploit_map.setdefault(exp.vulnerability_id, []).append(exp)
 
-        # Sort by severity
         severity_order = {
             Severity.CRITICAL: 0,
             Severity.HIGH: 1,
@@ -41,6 +44,21 @@ class ReportAgent:
         report_lines: list[str] = []
         report_lines.append("# RedBrain Security Report")
         report_lines.append("")
+
+        # Risk Score Section
+        if risk_score:
+            report_lines.append("## Risk Assessment")
+            report_lines.append("")
+            grade = risk_score.get("grade", "?")
+            score = risk_score.get("score", 0)
+            report_lines.append(f"**Security Grade: {grade}** (Score: {score}/100)")
+            report_lines.append("")
+            if risk_score.get("recommendation"):
+                report_lines.append(f"> {risk_score['recommendation']}")
+                report_lines.append("")
+            report_lines.append("---")
+            report_lines.append("")
+
         report_lines.append("## Executive Summary")
         report_lines.append("")
 
@@ -60,6 +78,21 @@ class ReportAgent:
         bounty = crit * 3000 + high * 1500 + med * 500 + low * 100
         report_lines.append(f"**Estimated bug bounty value:** ~${bounty:,}")
         report_lines.append("")
+
+        # Attack Chains Section
+        if attack_chains:
+            report_lines.append("---")
+            report_lines.append("")
+            report_lines.append("## Attack Chains")
+            report_lines.append("")
+            report_lines.append(f"RedBrain identified **{len(attack_chains)} potential attack chains** where vulnerabilities can be combined for greater impact:")
+            report_lines.append("")
+            for i, chain in enumerate(attack_chains[:5], 1):
+                desc = chain.get("description", "Unknown chain")
+                length = chain.get("chain_length", 0)
+                report_lines.append(f"{i}. **{desc}** (chain length: {length})")
+            report_lines.append("")
+
         report_lines.append("---")
         report_lines.append("")
 
@@ -72,7 +105,6 @@ class ReportAgent:
             report_lines.append(f"> {vuln.description}")
             report_lines.append("")
 
-            # Static evidence
             func = func_map.get(vuln.function_id or "")
             if func:
                 report_lines.append("### Static Evidence")
@@ -86,7 +118,6 @@ class ReportAgent:
                 report_lines.append("```")
                 report_lines.append("")
 
-            # Dynamic exploit
             vuln_exploits = exploit_map.get(vuln.id, [])
             for exp in vuln_exploits:
                 if exp.success:
@@ -102,7 +133,6 @@ class ReportAgent:
                     report_lines.append("```")
                     report_lines.append("")
 
-            # Similar CVEs
             if func and func.cve_matches:
                 report_lines.append("### Similar CVEs")
                 report_lines.append("")
@@ -115,11 +145,21 @@ class ReportAgent:
             report_lines.append("---")
             report_lines.append("")
 
+        # AI Analysis Footer
+        report_lines.append("## AI Analysis Metadata")
+        report_lines.append("")
+        report_lines.append("- **Engine:** RedBrain AI (ZeroEntropy zembed-1 + zerank-2)")
+        report_lines.append(f"- **Semantic correlations:** {sum(1 for c in correlations if c.reasoning.startswith('[AI]'))}")
+        report_lines.append(f"- **Attack chains detected:** {len(attack_chains) if attack_chains else 0}")
+        report_lines.append(f"- **Knowledge base:** CVEs + techniques + prior scan patterns")
+        report_lines.append("")
+
         report_md = "\n".join(report_lines)
 
         await event_bus.emit(self.scan_id, "report:complete", {
             "vulnerability_count": len(vulnerabilities),
             "report_length": len(report_md),
+            "risk_grade": risk_score.get("grade", "?") if risk_score else "?",
         })
 
         return report_md

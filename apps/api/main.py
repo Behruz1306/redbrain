@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 
+from .core.brain_store import brain_store
 from .core.models import ScanRequest, ScanResponse, Severity
 from .event_bus import event_bus
 from .orchestrator import start_scan, scan_results
@@ -22,7 +23,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     yield
 
 
-app = FastAPI(title="RedBrain API", version="1.0.0", lifespan=lifespan)
+app = FastAPI(title="RedBrain API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -53,12 +54,15 @@ async def get_scan_status(scan_id: str) -> dict[str, Any]:
     is_done = event_bus.is_complete(scan_id)
     if result:
         vuln_count = len(result.get("vulnerabilities", []))
+        risk = result.get("risk_score", {})
         return {
             "scan_id": scan_id,
             "status": "complete" if is_done else "running",
             "progress": 1.0 if is_done else 0.5,
             "current_stage": "done" if is_done else "scanning",
             "vulnerability_count": vuln_count,
+            "risk_score": risk.get("score", 0),
+            "risk_grade": risk.get("grade", "?"),
         }
     return {
         "scan_id": scan_id,
@@ -75,7 +79,7 @@ async def get_report(scan_id: str) -> dict[str, Any]:
     if not result:
         return {"vulnerabilities": [], "report_markdown": "", "stats": {
             "total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "bounty_value": 0
-        }}
+        }, "risk_score": {}, "attack_chains": []}
 
     vulns = result.get("vulnerabilities", [])
     crit = sum(1 for v in vulns if v.severity == Severity.CRITICAL)
@@ -94,6 +98,8 @@ async def get_report(scan_id: str) -> dict[str, Any]:
             "low": low,
             "bounty_value": crit * 3000 + high * 1500 + med * 500 + low * 100,
         },
+        "risk_score": result.get("risk_score", {}),
+        "attack_chains": result.get("attack_chains", []),
     }
 
 
@@ -120,6 +126,50 @@ async def brain_graph(scan_id: str | None = None) -> dict[str, Any]:
     }
 
 
+@app.get("/api/brain/knowledge")
+async def brain_knowledge() -> dict[str, Any]:
+    """Get brain knowledge summary — how smart is RedBrain right now."""
+    from .core.zeroentropy_client import zeroentropy
+    from .core.gbrain_client import gbrain
+
+    summary = brain_store.get_knowledge_summary()
+    return {
+        **summary,
+        "embedding_corpus_size": zeroentropy.corpus_size,
+        "gbrain_pages": gbrain.page_count,
+        "gbrain_links": gbrain.link_count,
+        "active_scans": len(scan_results),
+    }
+
+
+@app.get("/api/brain/agents")
+async def brain_agents() -> dict[str, Any]:
+    """Get GStack agent role definitions."""
+    from pathlib import Path
+
+    roles_dir = Path(__file__).parent.parent.parent / ".claude" / "commands"
+    agents = []
+
+    if roles_dir.exists():
+        for md_file in sorted(roles_dir.glob("*.md")):
+            content = md_file.read_text()
+            name = md_file.stem.replace("redbrain-", "")
+            lines = content.strip().split("\n")
+            description = ""
+            for line in lines:
+                if line.strip() and not line.startswith("#") and not line.startswith("---"):
+                    description = line.strip()
+                    break
+            agents.append({
+                "name": name,
+                "file": md_file.name,
+                "description": description,
+                "role_content": content[:500],
+            })
+
+    return {"agents": agents, "framework": "GStack"}
+
+
 @app.get("/api/health")
 async def health() -> dict[str, str]:
-    return {"status": "ok"}
+    return {"status": "ok", "version": "2.0.0", "engine": "redbrain-ai"}

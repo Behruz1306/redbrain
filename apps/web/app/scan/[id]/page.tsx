@@ -58,7 +58,7 @@ function eventToLog(event: ScanEvent, side: "sast" | "dast"): LogEntry | null {
       return {
         timestamp,
         type: "LINK",
-        message: `${payload.function_name} → ${payload.endpoint} (${((payload.confidence as number) * 100).toFixed(0)}%)`,
+        message: `${payload.function_name} → ${payload.endpoint} (${((payload.confidence as number) * 100).toFixed(0)}%) [${payload.method || "heuristic"}]`,
         severity: "warning",
       };
   }
@@ -121,13 +121,18 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [currentStage, setCurrentStage] = useState(0);
   const [currentAction, setCurrentAction] = useState("Initializing scan...");
+  const [reasoning, setReasoning] = useState<string[]>([]);
+  const [riskScore, setRiskScore] = useState<{ score: number; grade: string } | null>(null);
+  const [brainContext, setBrainContext] = useState<{ prior_scans: number; known_patterns: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startTime] = useState(Date.now());
   const [elapsed, setElapsed] = useState(0);
 
   const handleEvent = useCallback((event: ScanEvent) => {
     const stageIdx = getStageIndex(event.type);
-    setCurrentStage(stageIdx);
+    if (stageIdx > 0 || event.type.startsWith("sast:")) {
+      setCurrentStage(stageIdx);
+    }
 
     // Route to terminals
     const sastLog = eventToLog(event, "sast");
@@ -135,6 +140,29 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
 
     const dastLog = eventToLog(event, "dast");
     if (dastLog) setDastLogs((prev) => [...prev, dastLog]);
+
+    // AI Reasoning traces
+    if (event.type === "agent:reasoning") {
+      const thought = `[${event.payload.agent}] ${event.payload.thought}`;
+      setReasoning((prev) => [...prev.slice(-9), thought]);
+      setCurrentAction(event.payload.thought as string);
+    }
+
+    // Brain context
+    if (event.type === "brain:context") {
+      setBrainContext({
+        prior_scans: event.payload.prior_scans as number,
+        known_patterns: event.payload.known_patterns as number,
+      });
+    }
+
+    // Risk score
+    if (event.type === "ai:risk_score") {
+      setRiskScore({
+        score: event.payload.score as number,
+        grade: event.payload.grade as string,
+      });
+    }
 
     // Update current action
     if (event.type === "exploit:attempt") {
@@ -147,6 +175,8 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
       setCurrentAction(`CVE match: ${event.payload.function_name} ~ ${event.payload.cve_id}`);
     } else if (event.type === "correlate:link_created") {
       setCurrentAction(`Correlating: ${event.payload.function_name} → ${event.payload.endpoint}`);
+    } else if (event.type === "ai:attack_chains") {
+      setCurrentAction(`Found ${event.payload.total} attack chains`);
     }
 
     // Update graph
@@ -196,7 +226,13 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
     // Navigate to report on complete
     if (event.type === "scan:complete") {
       setCurrentAction("Scan complete! Generating report...");
-      setTimeout(() => router.push(`/scan/${id}/report`), 1500);
+      if (event.payload.risk_grade) {
+        setRiskScore({
+          score: event.payload.risk_score as number,
+          grade: event.payload.risk_grade as string,
+        });
+      }
+      setTimeout(() => router.push(`/scan/${id}/report`), 2000);
     }
   }, [id, router]);
 
@@ -234,6 +270,26 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
             )}
           </div>
         ))}
+
+        {/* Brain context badge */}
+        {brainContext && brainContext.prior_scans > 0 && (
+          <span className="ml-2 px-2 py-0.5 rounded text-[9px] bg-purple-900/50 text-purple-300 border border-purple-700">
+            BRAIN: {brainContext.prior_scans} prior scans
+          </span>
+        )}
+
+        {/* Risk score badge */}
+        {riskScore && (
+          <span className={`ml-2 px-2 py-0.5 rounded text-[9px] font-bold ${
+            riskScore.grade === "F" ? "bg-red-900/50 text-red-300 border border-red-700" :
+            riskScore.grade === "D" ? "bg-orange-900/50 text-orange-300 border border-orange-700" :
+            riskScore.grade === "C" ? "bg-yellow-900/50 text-yellow-300 border border-yellow-700" :
+            "bg-green-900/50 text-green-300 border border-green-700"
+          }`}>
+            RISK: {riskScore.grade} ({riskScore.score}/100)
+          </span>
+        )}
+
         <span className="ml-auto text-xs text-[var(--color-text-dim)]">
           {Math.floor(elapsed / 1000)}s | scan:{id}
         </span>
@@ -247,17 +303,26 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
         {/* Right terminal: DAST */}
         <Terminal title="DAST — Dynamic Testing" logs={dastLogs} />
 
-        {/* Bottom: current action + graph */}
+        {/* Bottom: AI reasoning + graph */}
         <div className="col-span-2 grid grid-cols-[2fr_1fr] gap-3 min-h-0">
-          {/* Current action */}
-          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 flex items-center">
-            <div className="space-y-1">
-              <div className="text-[10px] uppercase text-[var(--color-text-dim)] tracking-wider">
-                Currently Executing
-              </div>
-              <div className="text-sm text-[var(--color-accent)] font-medium">
-                {currentAction}
-              </div>
+          {/* AI Reasoning panel */}
+          <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-3 flex flex-col overflow-hidden">
+            <div className="text-[9px] uppercase text-purple-400 tracking-wider font-semibold mb-1 flex items-center gap-2">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse" />
+              AI Reasoning Trace
+            </div>
+            <div className="flex-1 overflow-y-auto space-y-1">
+              {reasoning.length === 0 ? (
+                <div className="text-xs text-[var(--color-text-dim)]">{currentAction}</div>
+              ) : (
+                reasoning.map((thought, i) => (
+                  <div key={i} className={`text-[11px] leading-tight ${
+                    i === reasoning.length - 1 ? "text-[var(--color-accent)]" : "text-[var(--color-text-dim)]"
+                  }`}>
+                    {thought}
+                  </div>
+                ))
+              )}
             </div>
           </div>
 

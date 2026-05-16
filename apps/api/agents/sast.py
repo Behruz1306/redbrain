@@ -46,6 +46,11 @@ class SASTAgent:
         self.functions: list[FunctionInfo] = []
 
     async def run(self) -> list[FunctionInfo]:
+        await event_bus.emit(self.scan_id, "agent:reasoning", {
+            "agent": "sast",
+            "thought": f"Cloning {self.repo_url} for static analysis. Will apply 6 detectors: SQL injection, eval, hardcoded secrets, missing auth, unsafe deserialization, command injection.",
+        })
+
         clone_dir = tempfile.mkdtemp(prefix=f"redbrain-{self.scan_id}-")
         try:
             git.Repo.clone_from(self.repo_url, clone_dir, depth=1)
@@ -55,6 +60,11 @@ class SASTAgent:
 
         try:
             all_files = self._collect_files(clone_dir)
+
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "sast",
+                "thought": f"Found {len(all_files)} source files (.js/.ts/.py). Parsing functions and running pattern detectors.",
+            })
 
             for file_path in all_files:
                 rel_path = os.path.relpath(file_path, clone_dir)
@@ -101,6 +111,10 @@ class SASTAgent:
         # Phase 2: CVE matching via ZeroEntropy for high-risk functions
         high_risk = [f for f in self.functions if f.risk_signals]
         if high_risk and zeroentropy.corpus_size > 0:
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "sast",
+                "thought": f"Phase 2: Matching {len(high_risk)} high-risk functions against {zeroentropy.corpus_size} CVE embeddings using semantic similarity (ZeroEntropy zembed-1).",
+            })
             await self._match_cves(high_risk)
 
         await event_bus.emit(self.scan_id, "sast:complete", {
