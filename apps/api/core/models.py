@@ -52,6 +52,11 @@ class ScanEvent(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class CVEMatch(BaseModel):
+    cve_id: str
+    similarity: float
+
+
 class FunctionInfo(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     file_path: str
@@ -60,6 +65,7 @@ class FunctionInfo(BaseModel):
     source_code: str
     parameters: list[str] = Field(default_factory=list)
     risk_signals: list[str] = Field(default_factory=list)
+    cve_matches: list[CVEMatch] = Field(default_factory=list)
 
 
 class EndpointInfo(BaseModel):

@@ -102,6 +102,16 @@ class ReportAgent:
                     report_lines.append("```")
                     report_lines.append("")
 
+            # Similar CVEs
+            if func and func.cve_matches:
+                report_lines.append("### Similar CVEs")
+                report_lines.append("")
+                for match in func.cve_matches[:3]:
+                    report_lines.append(
+                        f"- **{match.cve_id}** (similarity: {match.similarity:.0%})"
+                    )
+                report_lines.append("")
+
             report_lines.append("---")
             report_lines.append("")
 

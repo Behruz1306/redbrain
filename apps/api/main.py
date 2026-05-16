@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from typing import Any
+import logging
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,8 +11,18 @@ from fastapi.responses import PlainTextResponse
 from .core.models import ScanRequest, ScanResponse, Severity
 from .event_bus import event_bus
 from .orchestrator import start_scan, scan_results
+from .seed.seed_brain import ensure_seeded
 
-app = FastAPI(title="RedBrain API", version="1.0.0")
+logging.basicConfig(level=logging.INFO)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI) -> AsyncIterator[None]:
+    await ensure_seeded()
+    yield
+
+
+app = FastAPI(title="RedBrain API", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,

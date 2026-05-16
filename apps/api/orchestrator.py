@@ -63,9 +63,18 @@ class ScanOrchestrator:
         # Build graph data for frontend
         graph_nodes = []
         graph_edges = []
+        cve_node_ids: set[str] = set()
+
         for f in sast_result:
             if f.risk_signals:
                 graph_nodes.append({"id": f.id, "label": f.name, "type": "function"})
+                for match in f.cve_matches:
+                    cve_node_id = f"cve-{match.cve_id}"
+                    if cve_node_id not in cve_node_ids:
+                        graph_nodes.append({"id": cve_node_id, "label": match.cve_id, "type": "cve"})
+                        cve_node_ids.add(cve_node_id)
+                    graph_edges.append({"source": f.id, "target": cve_node_id, "label": "similar_to"})
+
         for e in recon_result:
             graph_nodes.append({"id": e.id, "label": f"{e.method} {e.path}", "type": "endpoint"})
         for v in vulnerabilities:

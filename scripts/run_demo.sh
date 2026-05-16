@@ -22,10 +22,8 @@ echo "[*] Juice Shop ready at http://localhost:3000"
 
 # Start backend
 echo "[*] Starting RedBrain API..."
-cd apps/api
-python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &
+python3 -m uvicorn apps.api.main:app --host 0.0.0.0 --port 8000 &
 API_PID=$!
-cd "$PROJECT_ROOT"
 
 sleep 2
 

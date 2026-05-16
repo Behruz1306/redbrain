@@ -20,6 +20,16 @@ class ZeroEntropyClient:
         self._use_local = not self.api_key
         self._local_embeddings: dict[str, list[float]] = {}
         self._embedding_dim = 384
+        self._http: httpx.AsyncClient | None = None
+
+    async def _get_client(self) -> httpx.AsyncClient:
+        if self._http is None or self._http.is_closed:
+            self._http = httpx.AsyncClient(
+                base_url=self.base_url,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                timeout=30.0,
+            )
+        return self._http
 
     async def embed(
         self, text: str, input_type: str = "document"
@@ -28,18 +38,18 @@ class ZeroEntropyClient:
         if self._use_local:
             return self._local_embed(text)
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{self.base_url}/v1/embeddings",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": "zembed-1",
-                    "input": text,
-                    "input_type": input_type,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()["data"][0]["embedding"]
+        client = await self._get_client()
+        resp = await client.post(
+            "/v1/models/embed",
+            json={
+                "model": "zembed-1",
+                "input": text,
+                "input_type": input_type,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return data["data"][0]["embedding"]
 
     async def embed_batch(
         self, texts: list[str], input_type: str = "document"
@@ -48,18 +58,21 @@ class ZeroEntropyClient:
         if self._use_local:
             return [self._local_embed(t) for t in texts]
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{self.base_url}/v1/embeddings",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": "zembed-1",
-                    "input": texts,
-                    "input_type": input_type,
-                },
-            )
-            resp.raise_for_status()
-            return [d["embedding"] for d in resp.json()["data"]]
+        if not texts:
+            return []
+
+        client = await self._get_client()
+        resp = await client.post(
+            "/v1/models/embed",
+            json={
+                "model": "zembed-1",
+                "input": texts,
+                "input_type": input_type,
+            },
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        return [d["embedding"] for d in data["data"]]
 
     async def rerank(
         self, query: str, documents: list[str], top_n: int = 3
@@ -68,22 +81,24 @@ class ZeroEntropyClient:
         if self._use_local:
             return self._local_rerank(query, documents, top_n)
 
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(
-                f"{self.base_url}/v1/rerank",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json={
-                    "model": "zerank-2",
-                    "query": query,
-                    "documents": documents,
-                    "top_n": top_n,
-                },
-            )
-            resp.raise_for_status()
-            return resp.json()["results"]
+        if not documents:
+            return []
+
+        client = await self._get_client()
+        resp = await client.post(
+            "/v1/models/rerank",
+            json={
+                "model": "zerank-2",
+                "query": query,
+                "documents": documents,
+                "top_n": top_n,
+            },
+        )
+        resp.raise_for_status()
+        return resp.json()["results"]
 
     async def similarity_search(
-        self, query_embedding: list[float], corpus_ids: list[str], top_k: int = 5
+        self, query_embedding: list[float], corpus_ids: list[str] | None = None, top_k: int = 5
     ) -> list[tuple[str, float]]:
         """Find most similar items in corpus by embedding."""
         if not self._local_embeddings:
@@ -92,7 +107,8 @@ class ZeroEntropyClient:
         query_vec = np.array(query_embedding)
         results: list[tuple[str, float]] = []
 
-        for doc_id in corpus_ids:
+        search_ids = corpus_ids or list(self._local_embeddings.keys())
+        for doc_id in search_ids:
             if doc_id not in self._local_embeddings:
                 continue
             doc_vec = np.array(self._local_embeddings[doc_id])
@@ -107,6 +123,10 @@ class ZeroEntropyClient:
     def store_embedding(self, doc_id: str, embedding: list[float]) -> None:
         """Cache an embedding locally for similarity search."""
         self._local_embeddings[doc_id] = embedding
+
+    @property
+    def corpus_size(self) -> int:
+        return len(self._local_embeddings)
 
     def _local_embed(self, text: str) -> list[float]:
         """Simple deterministic hash-based embedding for offline mode."""
@@ -134,6 +154,10 @@ class ZeroEntropyClient:
 
         scored.sort(key=lambda x: x["relevance_score"], reverse=True)
         return scored[:top_n]
+
+    async def close(self) -> None:
+        if self._http and not self._http.is_closed:
+            await self._http.aclose()
 
 
 zeroentropy = ZeroEntropyClient()

@@ -6,7 +6,8 @@ from pathlib import Path
 
 import git
 
-from ..core.models import FunctionInfo
+from ..core.models import CVEMatch, FunctionInfo
+from ..core.zeroentropy_client import zeroentropy
 from ..event_bus import event_bus
 from ..parsers.javascript import JavaScriptParser
 from ..parsers.python import PythonParser
@@ -97,9 +98,14 @@ class SASTAgent:
             import shutil
             shutil.rmtree(clone_dir, ignore_errors=True)
 
+        # Phase 2: CVE matching via ZeroEntropy for high-risk functions
+        high_risk = [f for f in self.functions if f.risk_signals]
+        if high_risk and zeroentropy.corpus_size > 0:
+            await self._match_cves(high_risk)
+
         await event_bus.emit(self.scan_id, "sast:complete", {
             "total_functions": len(self.functions),
-            "high_risk_count": sum(1 for f in self.functions if f.risk_signals),
+            "high_risk_count": len(high_risk),
         })
 
         return self.functions
@@ -127,3 +133,29 @@ class SASTAgent:
             if detect_fn(source):
                 signals.append(name)
         return signals
+
+    async def _match_cves(self, high_risk: list[FunctionInfo]) -> None:
+        """Embed high-risk functions and find similar CVEs."""
+        for func in high_risk[:30]:
+            try:
+                query_text = f"{func.name} {' '.join(func.risk_signals)} {func.source_code[:500]}"
+                query_embedding = await zeroentropy.embed(query_text, input_type="query")
+
+                matches = await zeroentropy.similarity_search(
+                    query_embedding, top_k=3
+                )
+
+                for cve_id, score in matches:
+                    if score < 0.3:
+                        continue
+                    clean_id = cve_id.replace("cve:", "")
+                    func.cve_matches.append(CVEMatch(cve_id=clean_id, similarity=score))
+
+                    await event_bus.emit(self.scan_id, "sast:cve_match", {
+                        "function_id": func.id,
+                        "function_name": func.name,
+                        "cve_id": clean_id,
+                        "similarity_score": round(score, 3),
+                    })
+            except Exception:
+                continue

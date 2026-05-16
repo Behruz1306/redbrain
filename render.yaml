@@ -1,0 +1,31 @@
+services:
+  # FastAPI Backend
+  - type: web
+    name: redbrain-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: ZEROENTROPY_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: PYTHON_ENV
+        value: production
+    healthCheckPath: /api/health
+    plan: free
+
+  # Next.js Frontend
+  - type: web
+    name: redbrain-web
+    runtime: node
+    buildCommand: cd apps/web && npm install && npm run build
+    startCommand: cd apps/web && npm start
+    envVars:
+      - key: NEXT_PUBLIC_API_HOST
+        fromService:
+          name: redbrain-api
+          type: web
+          property: host
+      - key: PORT
+        value: "3000"
+    plan: free

@@ -40,6 +40,13 @@ function eventToLog(event: ScanEvent, side: "sast" | "dast"): LogEntry | null {
         message: `${payload.name} [${(payload.risk_signals as string[])?.join(", ")}]`,
         severity: "critical",
       };
+    if (type === "sast:cve_match")
+      return {
+        timestamp,
+        type: "CVE",
+        message: `${payload.function_name} ~ ${payload.cve_id} (${((payload.similarity_score as number) * 100).toFixed(0)}%)`,
+        severity: "warning",
+      };
     if (type === "sast:complete")
       return {
         timestamp,
@@ -136,6 +143,8 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
       );
     } else if (event.type === "sast:function_analyzed") {
       setCurrentAction(`Analyzing function: ${event.payload.name}`);
+    } else if (event.type === "sast:cve_match") {
+      setCurrentAction(`CVE match: ${event.payload.function_name} ~ ${event.payload.cve_id}`);
     } else if (event.type === "correlate:link_created") {
       setCurrentAction(`Correlating: ${event.payload.function_name} → ${event.payload.endpoint}`);
     }
@@ -145,6 +154,17 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
       setNodes((prev) => [
         ...prev,
         { id: event.payload.function_id as string, label: event.payload.name as string, type: "function" },
+      ]);
+    }
+    if (event.type === "sast:cve_match") {
+      const cveNodeId = `cve-${event.payload.cve_id}`;
+      setNodes((prev) => {
+        if (prev.find((n) => n.id === cveNodeId)) return prev;
+        return [...prev, { id: cveNodeId, label: event.payload.cve_id as string, type: "cve" }];
+      });
+      setEdges((prev) => [
+        ...prev,
+        { source: event.payload.function_id as string, target: cveNodeId, label: "similar_to" },
       ]);
     }
     if (event.type === "recon:endpoint_found") {
