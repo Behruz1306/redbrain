@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..core.llm_client import llm
 from ..core.models import (
     Correlation,
     EndpointInfo,
@@ -66,6 +67,12 @@ class ReportAgent:
         high = sum(1 for v in vulnerabilities if v.severity == Severity.HIGH)
         med = sum(1 for v in vulnerabilities if v.severity == Severity.MEDIUM)
         low = sum(1 for v in vulnerabilities if v.severity == Severity.LOW)
+
+        # AI-generated executive summary
+        ai_summary = await self._generate_ai_summary(vulnerabilities, endpoints, correlations, exploits)
+        if ai_summary:
+            report_lines.append(ai_summary)
+            report_lines.append("")
 
         report_lines.append(f"- **Total vulnerabilities found:** {len(vulnerabilities)}")
         report_lines.append(f"- **Critical:** {crit} | **High:** {high} | **Medium:** {med} | **Low:** {low}")
@@ -163,6 +170,36 @@ class ReportAgent:
         })
 
         return report_md
+
+    async def _generate_ai_summary(
+        self,
+        vulnerabilities: list[Vulnerability],
+        endpoints: list[EndpointInfo],
+        correlations: list[Correlation],
+        exploits: list[ExploitResult],
+    ) -> str:
+        if not llm.available or not vulnerabilities:
+            return ""
+
+        try:
+            vuln_summary = ", ".join(
+                f"{v.vuln_class.value}({v.severity.value})" for v in vulnerabilities[:10]
+            )
+            successful = sum(1 for e in exploits if e.success)
+            prompt = (
+                f"Write a 2-3 sentence executive summary for a security assessment report.\n"
+                f"Findings: {len(vulnerabilities)} vulnerabilities [{vuln_summary}]\n"
+                f"Endpoints tested: {len(endpoints)}\n"
+                f"Successful exploits: {successful}/{len(exploits)}\n"
+                f"Correlations: {len(correlations)} code-to-endpoint links confirmed\n\n"
+                f"Be concise, professional, and highlight the most critical risk."
+            )
+            summary = await llm.ask("report", prompt, max_tokens=200)
+            if summary and "offline" not in summary:
+                return summary.strip()
+        except Exception:
+            pass
+        return ""
 
     def _severity_badge(self, severity: Severity) -> str:
         badges = {

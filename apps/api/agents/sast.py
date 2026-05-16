@@ -6,6 +6,7 @@ from pathlib import Path
 
 import git
 
+from ..core.llm_client import llm
 from ..core.models import CVEMatch, FunctionInfo
 from ..core.zeroentropy_client import zeroentropy
 from ..event_bus import event_bus
@@ -117,9 +118,18 @@ class SASTAgent:
             })
             await self._match_cves(high_risk)
 
+        # Phase 3: AI validation of top findings
+        if llm.available and high_risk:
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "sast",
+                "thought": f"Phase 3: Using {llm.provider} to validate top {min(5, len(high_risk))} findings and assess real exploitability.",
+            })
+            await self._ai_validate(high_risk[:5])
+
         await event_bus.emit(self.scan_id, "sast:complete", {
             "total_functions": len(self.functions),
             "high_risk_count": len(high_risk),
+            "ai_provider": llm.provider,
         })
 
         return self.functions
@@ -147,6 +157,29 @@ class SASTAgent:
             if detect_fn(source):
                 signals.append(name)
         return signals
+
+    async def _ai_validate(self, high_risk: list[FunctionInfo]) -> None:
+        """Use LLM to validate whether detected patterns are real vulnerabilities."""
+        for func in high_risk:
+            try:
+                prompt = (
+                    f"Analyze this function for security vulnerabilities.\n"
+                    f"Function: {func.name}\n"
+                    f"File: {func.file_path}\n"
+                    f"Detected signals: {func.risk_signals}\n"
+                    f"Code:\n```\n{func.source_code[:600]}\n```\n\n"
+                    f"In 1 sentence: Is this a real exploitable vulnerability or a false positive? "
+                    f"Rate confidence 0-100."
+                )
+                response = await llm.ask("sast", prompt, max_tokens=100)
+                if response and "offline" not in response:
+                    await event_bus.emit(self.scan_id, "ai:sast_validation", {
+                        "function": func.name,
+                        "signals": func.risk_signals,
+                        "ai_assessment": response.strip()[:200],
+                    })
+            except Exception:
+                continue
 
     async def _match_cves(self, high_risk: list[FunctionInfo]) -> None:
         """Embed high-risk functions and find similar CVEs."""

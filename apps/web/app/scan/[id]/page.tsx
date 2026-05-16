@@ -144,8 +144,18 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
     // AI Reasoning traces
     if (event.type === "agent:reasoning") {
       const thought = `[${event.payload.agent}] ${event.payload.thought}`;
-      setReasoning((prev) => [...prev.slice(-9), thought]);
+      setReasoning((prev) => [...prev.slice(-14), thought]);
       setCurrentAction(event.payload.thought as string);
+    }
+
+    // AI insights as reasoning
+    if (event.type === "ai:sast_validation") {
+      const thought = `[ai/sast] ${event.payload.function}: ${event.payload.ai_assessment}`;
+      setReasoning((prev) => [...prev.slice(-14), thought]);
+    }
+    if (event.type === "ai:correlation_insight") {
+      const thought = `[ai/correlate] ${event.payload.function} → ${event.payload.endpoint}: ${event.payload.insight}`;
+      setReasoning((prev) => [...prev.slice(-14), thought]);
     }
 
     // Brain context

@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 
 from ..core.ai_insights import ai_insights
+from ..core.llm_client import llm
 from ..core.models import Correlation, EndpointInfo, FunctionInfo
 from ..event_bus import event_bus
 
@@ -96,17 +97,61 @@ class CorrelateAgent:
         except Exception:
             pass
 
+        # Phase 3: AI-enhanced reasoning (if LLM available)
+        if llm.available and correlations:
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "correlate",
+                "thought": f"Phase 3: Using {llm.provider} to validate and explain top correlations",
+            })
+            await self._ai_validate_correlations(correlations[:5], functions, endpoints)
+
         await event_bus.emit(self.scan_id, "agent:reasoning", {
             "agent": "correlate",
-            "thought": f"Correlation complete: {len(correlations)} total links (heuristic + semantic)",
+            "thought": f"Correlation complete: {len(correlations)} total links (heuristic + semantic + AI)",
         })
 
         await event_bus.emit(self.scan_id, "correlate:complete", {
             "links_count": len(correlations),
             "heuristic_count": len(heuristic_pairs),
             "semantic_count": len(correlations) - len(heuristic_pairs),
+            "ai_provider": llm.provider,
         })
         return correlations
+
+    async def _ai_validate_correlations(
+        self,
+        correlations: list[Correlation],
+        functions: list[FunctionInfo],
+        endpoints: list[EndpointInfo],
+    ) -> None:
+        func_map = {f.id: f for f in functions}
+        ep_map = {e.id: e for e in endpoints}
+
+        for corr in correlations:
+            func = func_map.get(corr.function_id)
+            ep = ep_map.get(corr.endpoint_id)
+            if not func or not ep:
+                continue
+
+            prompt = (
+                f"Vulnerable function '{func.name}' in {func.file_path} has risk signals: {func.risk_signals}.\n"
+                f"It is correlated to endpoint {ep.method} {ep.path}.\n"
+                f"Code snippet:\n{func.source_code[:300]}\n\n"
+                f"In 1-2 sentences, explain the security risk of this correlation. "
+                f"How could an attacker exploit this function through this endpoint?"
+            )
+
+            try:
+                explanation = await llm.ask("correlate", prompt, max_tokens=150)
+                if explanation and "offline" not in explanation:
+                    corr.reasoning = f"[AI] {explanation.strip()}"
+                    await event_bus.emit(self.scan_id, "ai:correlation_insight", {
+                        "function": func.name,
+                        "endpoint": f"{ep.method} {ep.path}",
+                        "insight": explanation.strip()[:200],
+                    })
+            except Exception:
+                continue
 
     def _score_match(self, func: FunctionInfo, endpoint: EndpointInfo) -> tuple[float, str]:
         score = 0.0

@@ -171,5 +171,12 @@ async def brain_agents() -> dict[str, Any]:
 
 
 @app.get("/api/health")
-async def health() -> dict[str, str]:
-    return {"status": "ok", "version": "2.0.0", "engine": "redbrain-ai"}
+async def health() -> dict[str, Any]:
+    from .core.llm_client import llm
+    return {
+        "status": "ok",
+        "version": "2.0.0",
+        "engine": "redbrain-ai",
+        "ai_provider": llm.provider,
+        "ai_available": llm.available,
+    }
