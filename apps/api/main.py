@@ -108,7 +108,12 @@ async def download_report(scan_id: str) -> PlainTextResponse:
 
 @app.get("/api/brain/graph")
 async def brain_graph(scan_id: str | None = None) -> dict[str, Any]:
-    result = scan_results.get(scan_id or "", {})
+    if scan_id:
+        result = scan_results.get(scan_id, {})
+    elif scan_results:
+        result = list(scan_results.values())[-1]
+    else:
+        result = {}
     return {
         "nodes": result.get("graph_nodes", []),
         "edges": result.get("graph_edges", []),
