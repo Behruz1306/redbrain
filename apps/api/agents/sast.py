@@ -52,46 +52,50 @@ class SASTAgent:
             await event_bus.emit(self.scan_id, "sast:error", {"error": str(e)})
             return []
 
-        all_files = self._collect_files(clone_dir)
+        try:
+            all_files = self._collect_files(clone_dir)
 
-        for file_path in all_files:
-            rel_path = os.path.relpath(file_path, clone_dir)
-            await event_bus.emit(self.scan_id, "sast:file_started", {"path": rel_path})
+            for file_path in all_files:
+                rel_path = os.path.relpath(file_path, clone_dir)
+                await event_bus.emit(self.scan_id, "sast:file_started", {"path": rel_path})
 
-            try:
-                source = Path(file_path).read_text(errors="ignore")
-            except Exception:
-                continue
+                try:
+                    source = Path(file_path).read_text(errors="ignore")
+                except Exception:
+                    continue
 
-            if len(source) > MAX_FILE_SIZE:
-                continue
+                if len(source) > MAX_FILE_SIZE:
+                    continue
 
-            ext = Path(file_path).suffix
-            parser = self._get_parser(ext)
-            if not parser:
-                continue
+                ext = Path(file_path).suffix
+                parser = self._get_parser(ext)
+                if not parser:
+                    continue
 
-            parsed = parser.parse_file(rel_path, source)
-            for func in parsed:
-                signals = self._detect_patterns(func.source_code)
-                func_info = FunctionInfo(
-                    file_path=rel_path,
-                    name=func.name,
-                    line=func.line,
-                    source_code=func.source_code,
-                    parameters=func.parameters,
-                    risk_signals=signals,
-                )
-                self.functions.append(func_info)
+                parsed = parser.parse_file(rel_path, source)
+                for func in parsed:
+                    signals = self._detect_patterns(func.source_code)
+                    func_info = FunctionInfo(
+                        file_path=rel_path,
+                        name=func.name,
+                        line=func.line,
+                        source_code=func.source_code,
+                        parameters=func.parameters,
+                        risk_signals=signals,
+                    )
+                    self.functions.append(func_info)
 
-                if signals:
-                    await event_bus.emit(self.scan_id, "sast:function_analyzed", {
-                        "function_id": func_info.id,
-                        "name": func_info.name,
-                        "file": rel_path,
-                        "line": func.line,
-                        "risk_signals": signals,
-                    })
+                    if signals:
+                        await event_bus.emit(self.scan_id, "sast:function_analyzed", {
+                            "function_id": func_info.id,
+                            "name": func_info.name,
+                            "file": rel_path,
+                            "line": func.line,
+                            "risk_signals": signals,
+                        })
+        finally:
+            import shutil
+            shutil.rmtree(clone_dir, ignore_errors=True)
 
         await event_bus.emit(self.scan_id, "sast:complete", {
             "total_functions": len(self.functions),

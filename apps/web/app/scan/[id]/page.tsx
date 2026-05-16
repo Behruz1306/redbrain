@@ -114,6 +114,9 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
   const [edges, setEdges] = useState<GraphEdge[]>([]);
   const [currentStage, setCurrentStage] = useState(0);
   const [currentAction, setCurrentAction] = useState("Initializing scan...");
+  const [error, setError] = useState<string | null>(null);
+  const [startTime] = useState(Date.now());
+  const [elapsed, setElapsed] = useState(0);
 
   const handleEvent = useCallback((event: ScanEvent) => {
     const stageIdx = getStageIndex(event.type);
@@ -164,16 +167,30 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
       ]);
     }
 
+    // Handle errors
+    if (event.type === "scan:error") {
+      setError(event.payload.error as string);
+      setCurrentAction(`Error: ${event.payload.error}`);
+    }
+
     // Navigate to report on complete
     if (event.type === "scan:complete") {
+      setCurrentAction("Scan complete! Generating report...");
       setTimeout(() => router.push(`/scan/${id}/report`), 1500);
     }
   }, [id, router]);
 
   useEffect(() => {
-    const ws = connectScanStream(id, handleEvent);
+    const ws = connectScanStream(id, handleEvent, () => {
+      if (!error) setError("Connection lost");
+    });
     return () => ws.close();
-  }, [id, handleEvent]);
+  }, [id, handleEvent, error]);
+
+  useEffect(() => {
+    const timer = setInterval(() => setElapsed(Date.now() - startTime), 1000);
+    return () => clearInterval(timer);
+  }, [startTime]);
 
   return (
     <div className="h-screen flex flex-col p-3 gap-3">
@@ -197,7 +214,9 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
             )}
           </div>
         ))}
-        <span className="ml-auto text-xs text-[var(--color-text-dim)]">scan:{id}</span>
+        <span className="ml-auto text-xs text-[var(--color-text-dim)]">
+          {Math.floor(elapsed / 1000)}s | scan:{id}
+        </span>
       </div>
 
       {/* Main content */}

@@ -26,6 +26,18 @@ class ScanOrchestrator:
         self.report = ReportAgent(scan_id)
 
     async def run(self) -> None:
+        try:
+            await asyncio.wait_for(self._run_pipeline(), timeout=180.0)
+        except asyncio.TimeoutError:
+            await event_bus.emit(self.scan_id, "scan:error", {
+                "error": "Scan timed out after 180 seconds",
+            })
+        except Exception as e:
+            await event_bus.emit(self.scan_id, "scan:error", {
+                "error": str(e),
+            })
+
+    async def _run_pipeline(self) -> None:
         await event_bus.emit(self.scan_id, "scan:started", {
             "repo_url": self.repo_url,
             "deployed_url": self.deployed_url,
@@ -72,6 +84,7 @@ class ScanOrchestrator:
             "report_markdown": report_md,
             "graph_nodes": graph_nodes,
             "graph_edges": graph_edges,
+            "status": "complete",
         }
 
         await event_bus.emit(self.scan_id, "scan:complete", {

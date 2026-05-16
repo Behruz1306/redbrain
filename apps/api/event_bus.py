@@ -11,9 +11,13 @@ from fastapi import WebSocket
 class EventBus:
     def __init__(self) -> None:
         self._subscribers: dict[str, list[asyncio.Queue[dict[str, Any]]]] = defaultdict(list)
+        self._history: dict[str, list[dict[str, Any]]] = defaultdict(list)
 
     def subscribe(self, scan_id: str) -> asyncio.Queue[dict[str, Any]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+        # Replay history so late-joining clients see past events
+        for event in self._history[scan_id]:
+            queue.put_nowait(event)
         self._subscribers[scan_id].append(queue)
         return queue
 
@@ -28,6 +32,7 @@ class EventBus:
             "timestamp": datetime.utcnow().isoformat(),
             "payload": payload or {},
         }
+        self._history[scan_id].append(event)
         for queue in self._subscribers[scan_id]:
             await queue.put(event)
 
@@ -37,10 +42,16 @@ class EventBus:
             while True:
                 event = await queue.get()
                 await ws.send_json(event)
-                if event["type"] == "scan:complete":
+                if event["type"] in ("scan:complete", "scan:error"):
                     break
         finally:
             self.unsubscribe(scan_id, queue)
+
+    def is_complete(self, scan_id: str) -> bool:
+        for event in self._history.get(scan_id, []):
+            if event["type"] in ("scan:complete", "scan:error"):
+                return True
+        return False
 
 
 event_bus = EventBus()

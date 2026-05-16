@@ -4,12 +4,18 @@ set -e
 echo "=== RedBrain Demo Runner ==="
 echo ""
 
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$PROJECT_ROOT"
+
 # Start Juice Shop if not running
 if ! curl -s http://localhost:3000 > /dev/null 2>&1; then
     echo "[*] Starting Juice Shop..."
-    cd targets && docker compose up -d && cd ..
+    docker compose -f targets/docker-compose.yml up -d
     echo "[*] Waiting for Juice Shop to start..."
-    sleep 5
+    for i in {1..30}; do
+        if curl -s http://localhost:3000 > /dev/null 2>&1; then break; fi
+        sleep 1
+    done
 fi
 
 echo "[*] Juice Shop ready at http://localhost:3000"
@@ -17,24 +23,24 @@ echo "[*] Juice Shop ready at http://localhost:3000"
 # Start backend
 echo "[*] Starting RedBrain API..."
 cd apps/api
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload &
+python3 -m uvicorn main:app --host 0.0.0.0 --port 8000 &
 API_PID=$!
-cd ../..
+cd "$PROJECT_ROOT"
 
 sleep 2
 
 # Start frontend
 echo "[*] Starting RedBrain Frontend..."
 cd apps/web
-bun run dev &
+npx next dev --port 3001 &
 WEB_PID=$!
-cd ../..
+cd "$PROJECT_ROOT"
 
 echo ""
 echo "=== RedBrain is running ==="
-echo "  Frontend: http://localhost:3000"
+echo "  Frontend: http://localhost:3001"
 echo "  API:      http://localhost:8000"
-echo "  Target:   http://localhost:3000"
+echo "  Target:   http://localhost:3000 (Juice Shop)"
 echo ""
 echo "Press Ctrl+C to stop all services"
 

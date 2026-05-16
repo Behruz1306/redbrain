@@ -6,13 +6,15 @@ export interface ScanEvent {
 
 export type EventHandler = (event: ScanEvent) => void;
 
+const API_HOST = process.env.NEXT_PUBLIC_API_HOST || "localhost:8000";
+
 export function connectScanStream(
   scanId: string,
   onEvent: EventHandler,
   onClose?: () => void
 ): WebSocket {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const wsUrl = `${protocol}//${window.location.host}/api/scan/${scanId}/stream`;
+  const wsUrl = `${protocol}//${API_HOST}/api/scan/${scanId}/stream`;
   const ws = new WebSocket(wsUrl);
 
   ws.onmessage = (msg) => {

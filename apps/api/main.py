@@ -35,6 +35,28 @@ async def scan_stream(websocket: WebSocket, scan_id: str) -> None:
         pass
 
 
+@app.get("/api/scan/{scan_id}")
+async def get_scan_status(scan_id: str) -> dict[str, Any]:
+    result = scan_results.get(scan_id)
+    is_done = event_bus.is_complete(scan_id)
+    if result:
+        vuln_count = len(result.get("vulnerabilities", []))
+        return {
+            "scan_id": scan_id,
+            "status": "complete" if is_done else "running",
+            "progress": 1.0 if is_done else 0.5,
+            "current_stage": "done" if is_done else "scanning",
+            "vulnerability_count": vuln_count,
+        }
+    return {
+        "scan_id": scan_id,
+        "status": "running" if not is_done else "error",
+        "progress": 0.0,
+        "current_stage": "initializing",
+        "vulnerability_count": 0,
+    }
+
+
 @app.get("/api/scan/{scan_id}/report")
 async def get_report(scan_id: str) -> dict[str, Any]:
     result = scan_results.get(scan_id)
