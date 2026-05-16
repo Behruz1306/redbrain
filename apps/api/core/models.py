@@ -76,6 +76,13 @@ class EndpointInfo(BaseModel):
     auth_required: bool | None = None
 
 
+class Remediation(BaseModel):
+    fixed_code: str = ""
+    explanation: str = ""
+    file_path: str = ""
+    line: int = 0
+
+
 class Vulnerability(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     vuln_class: VulnClass
@@ -86,6 +93,7 @@ class Vulnerability(BaseModel):
     endpoint_id: str | None = None
     title: str = ""
     description: str = ""
+    remediation: Remediation | None = None
 
 
 class ExploitResult(BaseModel):

@@ -103,6 +103,29 @@ async def get_report(scan_id: str) -> dict[str, Any]:
     }
 
 
+@app.get("/api/scan/{scan_id}/remediate")
+async def get_remediations(scan_id: str) -> dict[str, Any]:
+    result = scan_results.get(scan_id)
+    if not result:
+        return {"remediations": []}
+
+    vulns = result.get("vulnerabilities", [])
+    remediations = []
+    for v in vulns:
+        if v.remediation and v.remediation.fixed_code:
+            remediations.append({
+                "vuln_id": v.id,
+                "title": v.title,
+                "severity": v.severity.value,
+                "vuln_class": v.vuln_class.value,
+                "file_path": v.remediation.file_path,
+                "line": v.remediation.line,
+                "fixed_code": v.remediation.fixed_code,
+                "explanation": v.remediation.explanation,
+            })
+    return {"remediations": remediations}
+
+
 @app.get("/api/scan/{scan_id}/report/download")
 async def download_report(scan_id: str) -> PlainTextResponse:
     result = scan_results.get(scan_id, {})

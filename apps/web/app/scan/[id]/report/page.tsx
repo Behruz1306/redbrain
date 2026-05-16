@@ -2,6 +2,13 @@
 
 import { useEffect, useState, use } from "react";
 
+interface RemediationData {
+  fixed_code: string;
+  explanation: string;
+  file_path: string;
+  line: number;
+}
+
 interface Vulnerability {
   id: string;
   vuln_class: string;
@@ -12,6 +19,7 @@ interface Vulnerability {
   description: string;
   function_id?: string;
   endpoint_id?: string;
+  remediation?: RemediationData | null;
 }
 
 interface RiskScore {
@@ -57,10 +65,32 @@ const gradeColor: Record<string, string> = {
   F: "text-red-400",
 };
 
+function generateIDEPrompt(vuln: Vulnerability): string {
+  const r = vuln.remediation;
+  if (!r || !r.fixed_code) return "";
+  return `Fix a ${vuln.severity} ${vuln.vuln_class} vulnerability in ${r.file_path} at line ${r.line}.
+
+Issue: ${vuln.title}
+${vuln.description}
+
+Replace the vulnerable code with this secure version:
+
+\`\`\`
+${r.fixed_code}
+\`\`\`
+
+Explanation: ${r.explanation}`;
+}
+
+function copyToClipboard(text: string) {
+  navigator.clipboard.writeText(text);
+}
+
 export default function ReportPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [report, setReport] = useState<ReportData | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
 
   useEffect(() => {
     fetch(`/api/scan/${id}/report`)
@@ -68,6 +98,12 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
       .then(setReport)
       .catch(() => {});
   }, [id]);
+
+  function handleCopy(vulnId: string, text: string) {
+    copyToClipboard(text);
+    setCopied(vulnId);
+    setTimeout(() => setCopied(null), 2000);
+  }
 
   if (!report) {
     return (
@@ -203,6 +239,53 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
                 <div className="text-[10px] text-[var(--color-text-dim)]">
                   Status: <span className="text-[var(--color-accent)]">{vuln.status}</span>
                 </div>
+
+                {/* AI Code Fix */}
+                {vuln.remediation && vuln.remediation.fixed_code && (
+                  <div className="mt-4 space-y-3">
+                    <div className="flex items-center gap-2">
+                      <span className="inline-block w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      <h4 className="text-xs font-semibold text-green-400 uppercase">AI-Generated Fix</h4>
+                    </div>
+                    <p className="text-xs text-[var(--color-text-dim)]">{vuln.remediation.explanation}</p>
+                    <div className="text-[10px] text-[var(--color-text-dim)]">
+                      {vuln.remediation.file_path}:{vuln.remediation.line}
+                    </div>
+                    <div className="relative">
+                      <pre className="bg-[var(--color-bg)] border border-[var(--color-border)] rounded p-3 text-xs overflow-x-auto max-h-64">
+                        <code>{vuln.remediation.fixed_code}</code>
+                      </pre>
+                      <button
+                        onClick={() => handleCopy(vuln.id, vuln.remediation!.fixed_code)}
+                        className="absolute top-2 right-2 px-2 py-1 text-[10px] bg-[var(--color-surface)] border border-[var(--color-border)] rounded hover:border-[var(--color-accent)] transition-colors"
+                      >
+                        {copied === vuln.id ? "Copied!" : "Copy"}
+                      </button>
+                    </div>
+
+                    {/* IDE Export Buttons */}
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <button
+                        onClick={() => handleCopy(vuln.id + "-cc", generateIDEPrompt(vuln))}
+                        className="px-3 py-1.5 text-[10px] font-semibold uppercase rounded bg-orange-900/30 border border-orange-700/50 text-orange-300 hover:bg-orange-900/50 transition-colors"
+                      >
+                        {copied === vuln.id + "-cc" ? "Copied!" : "Fix in Claude Code"}
+                      </button>
+                      <button
+                        onClick={() => handleCopy(vuln.id + "-cursor", generateIDEPrompt(vuln))}
+                        className="px-3 py-1.5 text-[10px] font-semibold uppercase rounded bg-blue-900/30 border border-blue-700/50 text-blue-300 hover:bg-blue-900/50 transition-colors"
+                      >
+                        {copied === vuln.id + "-cursor" ? "Copied!" : "Fix in Cursor"}
+                      </button>
+                      <button
+                        onClick={() => handleCopy(vuln.id + "-ag", generateIDEPrompt(vuln))}
+                        className="px-3 py-1.5 text-[10px] font-semibold uppercase rounded bg-purple-900/30 border border-purple-700/50 text-purple-300 hover:bg-purple-900/50 transition-colors"
+                      >
+                        {copied === vuln.id + "-ag" ? "Copied!" : "Fix in Antigravity"}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>

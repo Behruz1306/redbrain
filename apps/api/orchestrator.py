@@ -9,6 +9,7 @@ from .agents.recon import ReconAgent
 from .agents.correlate import CorrelateAgent
 from .agents.exploit import ExploitAgent
 from .agents.report import ReportAgent
+from .agents.remediate import RemediateAgent
 from .core.ai_insights import ai_insights
 from .core.brain_store import brain_store
 from .event_bus import event_bus
@@ -116,6 +117,16 @@ class ScanOrchestrator:
                 })
         except Exception:
             pass
+
+        # Phase 3.75: AI Remediation — generate code fixes
+        await event_bus.emit(self.scan_id, "agent:reasoning", {
+            "agent": "orchestrator",
+            "thought": "Generating AI-powered code fixes for each vulnerability...",
+        })
+
+        func_map = {f.id: f for f in sast_result}
+        remediate = RemediateAgent(self.scan_id)
+        await remediate.run(vulnerabilities, func_map)
 
         # Phase 4: Report generation
         await event_bus.emit(self.scan_id, "agent:reasoning", {
