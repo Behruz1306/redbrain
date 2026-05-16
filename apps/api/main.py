@@ -173,10 +173,17 @@ async def brain_agents() -> dict[str, Any]:
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     from .core.llm_client import llm
+    from .core.thehog_client import thehog
     return {
         "status": "ok",
         "version": "2.0.0",
         "engine": "redbrain-ai",
         "ai_provider": llm.provider,
         "ai_available": llm.available,
+        "thehog_available": thehog.available,
+        "integrations": ["ZeroEntropy", "GBrain", "GStack"]
+            + (["Gemini"] if "gemini" in llm.provider else [])
+            + (["Groq"] if "groq" in llm.provider else [])
+            + (["The Hog"] if thehog.available else [])
+            + ["Jo/Camofox"],
     }

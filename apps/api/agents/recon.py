@@ -6,6 +6,7 @@ from urllib.parse import urljoin, urlparse
 
 import httpx
 
+from ..core.camofox_client import camofox
 from ..core.models import EndpointInfo
 from ..event_bus import event_bus
 
@@ -20,6 +21,28 @@ class ReconAgent:
         self._timeout = 30.0
 
     async def run(self) -> list[EndpointInfo]:
+        await event_bus.emit(self.scan_id, "agent:reasoning", {
+            "agent": "recon",
+            "thought": f"Starting reconnaissance on {self.base_url}. Checking for Jo Camofox stealth browser...",
+        })
+
+        # Try stealth crawl with camofox first (bypasses WAF/Cloudflare)
+        stealth_links = await camofox.stealth_crawl(self.base_url)
+        if stealth_links:
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "recon",
+                "thought": f"Camofox stealth browser found {len(stealth_links)} links (WAF bypass active)",
+            })
+            for link in stealth_links[:20]:
+                parsed = urlparse(link)
+                if parsed.path and parsed.path not in self._visited:
+                    self._visited.add(parsed.path)
+        else:
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "recon",
+                "thought": "Camofox not available, using standard HTTP crawler",
+            })
+
         async with httpx.AsyncClient(
             base_url=self.base_url,
             timeout=10.0,

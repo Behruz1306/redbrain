@@ -58,10 +58,13 @@ export default function Home() {
             Autonomous AI security engineer powered by ZeroEntropy semantic intelligence.
             SAST + DAST + knowledge graph in one brain.
           </p>
-          <div className="flex items-center justify-center gap-3 text-[9px] text-[var(--color-text-dim)]">
+          <div className="flex items-center justify-center gap-2 text-[9px] text-[var(--color-text-dim)] flex-wrap">
             <span className="px-2 py-0.5 rounded border border-purple-800/50 text-purple-400">GStack</span>
             <span className="px-2 py-0.5 rounded border border-blue-800/50 text-blue-400">GBrain</span>
             <span className="px-2 py-0.5 rounded border border-green-800/50 text-green-400">ZeroEntropy</span>
+            <span className="px-2 py-0.5 rounded border border-yellow-800/50 text-yellow-400">Gemini</span>
+            <span className="px-2 py-0.5 rounded border border-orange-800/50 text-orange-400">The Hog</span>
+            <span className="px-2 py-0.5 rounded border border-cyan-800/50 text-cyan-400">Jo/Camofox</span>
           </div>
         </div>
 
@@ -110,18 +113,18 @@ export default function Home() {
           {[
             {
               title: "Semantic SAST",
-              desc: "AI-powered static analysis with CVE matching via ZeroEntropy embeddings",
+              desc: "AI-powered static analysis with CVE matching via ZeroEntropy + Gemini validation",
               badge: "zembed-1",
             },
             {
-              title: "Smart DAST",
-              desc: "Payload ranking and attack chain detection using semantic reranking",
-              badge: "zerank-2",
+              title: "Stealth DAST",
+              desc: "WAF-bypassing recon via Jo Camofox + payload ranking via ZeroEntropy reranking",
+              badge: "Camofox",
             },
             {
-              title: "Knowledge Brain",
-              desc: "Self-improving graph that compounds intelligence across scans",
-              badge: "GBrain",
+              title: "Threat Intel",
+              desc: "Real-time social listening for exploit discussions via The Hog intelligence",
+              badge: "The Hog",
             },
           ].map((f) => (
             <div

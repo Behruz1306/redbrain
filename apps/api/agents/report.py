@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 from ..core.llm_client import llm
+from ..core.thehog_client import thehog
 from ..core.models import (
     Correlation,
     EndpointInfo,
@@ -152,10 +153,29 @@ class ReportAgent:
             report_lines.append("---")
             report_lines.append("")
 
+        # Threat Intelligence Section (The Hog)
+        threat_intel = await self._gather_threat_intel(vulnerabilities)
+        if threat_intel:
+            report_lines.append("## Threat Intelligence (powered by The Hog)")
+            report_lines.append("")
+            report_lines.append("Real-world threat signals from social listening across Reddit, Twitter, forums:")
+            report_lines.append("")
+            for intel in threat_intel[:8]:
+                source = intel.get("source", "Web")
+                signal = intel.get("signal", "")
+                severity = intel.get("severity", "medium")
+                icon = {"critical": "🔴", "high": "🟠", "medium": "🟡", "low": "🟢"}.get(severity, "⚪")
+                report_lines.append(f"- {icon} **[{source}]** {signal}")
+            report_lines.append("")
+            report_lines.append("---")
+            report_lines.append("")
+
         # AI Analysis Footer
         report_lines.append("## AI Analysis Metadata")
         report_lines.append("")
         report_lines.append("- **Engine:** RedBrain AI (ZeroEntropy zembed-1 + zerank-2)")
+        report_lines.append(f"- **LLM Provider:** {llm.provider}")
+        report_lines.append(f"- **Threat Intel:** The Hog (YC F25) — social listening")
         report_lines.append(f"- **Semantic correlations:** {sum(1 for c in correlations if c.reasoning.startswith('[AI]'))}")
         report_lines.append(f"- **Attack chains detected:** {len(attack_chains) if attack_chains else 0}")
         report_lines.append(f"- **Knowledge base:** CVEs + techniques + prior scan patterns")
@@ -170,6 +190,27 @@ class ReportAgent:
         })
 
         return report_md
+
+    async def _gather_threat_intel(
+        self, vulnerabilities: list[Vulnerability]
+    ) -> list[dict[str, Any]]:
+        """Gather threat intelligence from The Hog for found vulnerability classes."""
+        vuln_classes = list({v.vuln_class.value for v in vulnerabilities})
+        all_intel: list[dict[str, Any]] = []
+
+        for vc in vuln_classes[:4]:
+            try:
+                intel = await thehog.get_vuln_class_intel(vc)
+                all_intel.extend(intel.get("signals", []))
+            except Exception:
+                continue
+
+        await event_bus.emit(self.scan_id, "agent:reasoning", {
+            "agent": "report",
+            "thought": f"Gathered {len(all_intel)} threat intelligence signals from The Hog for {len(vuln_classes)} vulnerability classes",
+        })
+
+        return all_intel
 
     async def _generate_ai_summary(
         self,
