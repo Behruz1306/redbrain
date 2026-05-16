@@ -8,14 +8,18 @@ export type EventHandler = (event: ScanEvent) => void;
 
 function getWsUrl(scanId: string): string {
   const apiHost = process.env.NEXT_PUBLIC_API_HOST;
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
 
   if (apiHost) {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
     return `${protocol}//${apiHost}/api/scan/${scanId}/stream`;
   }
 
-  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${protocol}//localhost:8000/api/scan/${scanId}/stream`;
+  // In containerized/nginx setup, WS goes through same origin
+  if (typeof window !== "undefined" && window.location.hostname !== "localhost") {
+    return `${protocol}//${window.location.host}/api/scan/${scanId}/stream`;
+  }
+
+  return `ws://localhost:8000/api/scan/${scanId}/stream`;
 }
 
 export function connectScanStream(

@@ -1,7 +1,8 @@
 import type { NextConfig } from "next";
 
-const API_URL = process.env.NEXT_PUBLIC_API_HOST
-  ? `https://${process.env.NEXT_PUBLIC_API_HOST}`
+const apiHost = process.env.NEXT_PUBLIC_API_HOST;
+const API_URL = apiHost
+  ? (apiHost.startsWith("http") ? apiHost : `https://${apiHost}`)
   : "http://localhost:8000";
 
 const nextConfig: NextConfig = {
@@ -13,7 +14,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-  output: "standalone",
 };
 
 export default nextConfig;
