@@ -32,10 +32,32 @@ class ScanOrchestrator:
         try:
             await asyncio.wait_for(self._run_pipeline(), timeout=180.0)
         except asyncio.TimeoutError:
+            scan_results[self.scan_id] = {
+                "vulnerabilities": [],
+                "exploits": [],
+                "report_markdown": "# Scan timed out\n\nThe scan exceeded the 180-second limit.",
+                "graph_nodes": [],
+                "graph_edges": [],
+                "attack_chains": [],
+                "risk_score": {"score": 0, "grade": "?"},
+                "status": "error",
+                "error": "Scan timed out after 180 seconds",
+            }
             await event_bus.emit(self.scan_id, "scan:error", {
                 "error": "Scan timed out after 180 seconds",
             })
         except Exception as e:
+            scan_results[self.scan_id] = {
+                "vulnerabilities": [],
+                "exploits": [],
+                "report_markdown": f"# Scan failed\n\nError: {str(e)}",
+                "graph_nodes": [],
+                "graph_edges": [],
+                "attack_chains": [],
+                "risk_score": {"score": 0, "grade": "?"},
+                "status": "error",
+                "error": str(e),
+            }
             await event_bus.emit(self.scan_id, "scan:error", {
                 "error": str(e),
             })

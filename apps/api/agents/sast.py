@@ -74,9 +74,21 @@ class SASTAgent:
 
         clone_dir = tempfile.mkdtemp(prefix=f"redbrain-{self.scan_id}-")
         try:
-            git.Repo.clone_from(self.repo_url, clone_dir, depth=1)
+            import asyncio
+            loop = asyncio.get_event_loop()
+            await asyncio.wait_for(
+                loop.run_in_executor(None, lambda: git.Repo.clone_from(self.repo_url, clone_dir, depth=1)),
+                timeout=60.0,
+            )
+        except asyncio.TimeoutError:
+            await event_bus.emit(self.scan_id, "sast:error", {"error": "Git clone timed out after 60 seconds"})
+            import shutil
+            shutil.rmtree(clone_dir, ignore_errors=True)
+            return []
         except Exception as e:
-            await event_bus.emit(self.scan_id, "sast:error", {"error": str(e)})
+            await event_bus.emit(self.scan_id, "sast:error", {"error": f"Clone failed: {str(e)}"})
+            import shutil
+            shutil.rmtree(clone_dir, ignore_errors=True)
             return []
 
         try:

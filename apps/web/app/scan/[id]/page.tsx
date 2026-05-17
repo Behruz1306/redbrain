@@ -261,11 +261,27 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
   }, [id, router]);
 
   useEffect(() => {
-    const ws = connectScanStream(id, handleEvent, () => {
-      if (!error) setError("Connection lost");
-    });
+    const ws = connectScanStream(id, handleEvent, () => {});
     return () => ws.close();
-  }, [id, handleEvent, error]);
+  }, [id, handleEvent]);
+
+  // Fallback polling: check scan status every 3s, redirect to report when done
+  useEffect(() => {
+    const poll = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/scan/${id}`);
+        const data = await res.json();
+        if (data.status === "complete") {
+          clearInterval(poll);
+          router.push(`/scan/${id}/report`);
+        } else if (data.status === "error") {
+          clearInterval(poll);
+          setError(data.error || "Scan failed");
+        }
+      } catch {}
+    }, 3000);
+    return () => clearInterval(poll);
+  }, [id, router]);
 
   useEffect(() => {
     const timer = setInterval(() => setElapsed(Date.now() - startTime), 1000);
