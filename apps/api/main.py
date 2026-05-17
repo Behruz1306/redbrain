@@ -242,6 +242,140 @@ async def brain_agents() -> dict[str, Any]:
     return {"agents": agents, "framework": "GStack"}
 
 
+@app.post("/api/v1/check")
+async def realtime_check(req: dict[str, Any]) -> dict[str, Any]:
+    """Real-time code analysis API for IDE integrations (MCP/API Key).
+
+    Body: {"code": "...", "language": "javascript|python", "file_path": "optional"}
+    Returns: {"vulnerabilities": [...], "risk_level": "...", "suggestions": [...]}
+    """
+    code = req.get("code", "")
+    language = req.get("language", "javascript")
+    file_path = req.get("file_path", "inline")
+
+    if not code:
+        return {"vulnerabilities": [], "risk_level": "safe", "suggestions": []}
+
+    from .patterns.sast import (
+        raw_sql, eval_user_input, hardcoded_secrets, missing_auth,
+        unsafe_deserialization, command_injection,
+    )
+    from .patterns.sast import (
+        ssrf, prototype_pollution, jwt_vulnerabilities, path_traversal,
+        nosql_injection, ssti, race_condition, mass_assignment,
+        insecure_crypto, open_redirect,
+    )
+
+    detectors = [
+        ("sql_injection", raw_sql.detect),
+        ("xss", eval_user_input.detect),
+        ("hardcoded_secrets", hardcoded_secrets.detect),
+        ("missing_auth", missing_auth.detect),
+        ("unsafe_deserialization", unsafe_deserialization.detect),
+        ("command_injection", command_injection.detect),
+        ("ssrf", ssrf.detect),
+        ("prototype_pollution", prototype_pollution.detect),
+        ("jwt_vulnerability", jwt_vulnerabilities.detect),
+        ("path_traversal", path_traversal.detect),
+        ("nosql_injection", nosql_injection.detect),
+        ("ssti", ssti.detect),
+        ("race_condition", race_condition.detect),
+        ("mass_assignment", mass_assignment.detect),
+        ("insecure_crypto", insecure_crypto.detect),
+        ("open_redirect", open_redirect.detect),
+    ]
+
+    findings = []
+    for name, detect_fn in detectors:
+        if detect_fn(code):
+            findings.append({
+                "type": name,
+                "severity": "critical" if name in ("sql_injection", "command_injection", "ssti", "nosql_injection") else
+                           "high" if name in ("ssrf", "path_traversal", "jwt_vulnerability", "prototype_pollution", "xss") else "medium",
+                "message": f"Potential {name.replace('_', ' ')} detected",
+                "file": file_path,
+            })
+
+    risk_level = "safe"
+    if any(f["severity"] == "critical" for f in findings):
+        risk_level = "critical"
+    elif any(f["severity"] == "high" for f in findings):
+        risk_level = "high"
+    elif findings:
+        risk_level = "medium"
+
+    suggestions = []
+    if findings:
+        from .core.llm_client import llm
+        if llm.available:
+            try:
+                prompt = (
+                    f"Given these security findings in {language} code:\n"
+                    f"Findings: {[f['type'] for f in findings]}\n"
+                    f"Code:\n```\n{code[:500]}\n```\n"
+                    f"Give 1-2 sentence fix suggestion for EACH finding. JSON array format: "
+                    f'[{{"type": "...", "fix": "..."}}]'
+                )
+                result = await llm.ask_json("remediate", prompt)
+                if isinstance(result, list):
+                    suggestions = result
+                elif isinstance(result, dict) and not result.get("parse_error"):
+                    suggestions = result.get("suggestions", [])
+            except Exception:
+                pass
+
+    return {
+        "vulnerabilities": findings,
+        "risk_level": risk_level,
+        "count": len(findings),
+        "suggestions": suggestions,
+        "api_version": "v1",
+    }
+
+
+@app.get("/api/v1/mcp/manifest")
+async def mcp_manifest() -> dict[str, Any]:
+    """MCP server manifest for IDE integrations."""
+    return {
+        "name": "redbrain",
+        "version": "1.0.0",
+        "description": "RedBrain AI Security Scanner — real-time vulnerability detection for your code",
+        "tools": [
+            {
+                "name": "check_code",
+                "description": "Analyze code for security vulnerabilities in real-time. Returns findings with severity and fix suggestions.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "code": {"type": "string", "description": "The source code to analyze"},
+                        "language": {"type": "string", "enum": ["javascript", "typescript", "python"], "description": "Programming language"},
+                        "file_path": {"type": "string", "description": "Optional file path for context"},
+                    },
+                    "required": ["code"],
+                },
+            },
+            {
+                "name": "scan_repo",
+                "description": "Start a full security scan of a GitHub repository. Returns scan_id for tracking.",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "repo_url": {"type": "string", "description": "GitHub repository URL"},
+                        "deployed_url": {"type": "string", "description": "Optional deployed URL for DAST"},
+                    },
+                    "required": ["repo_url"],
+                },
+            },
+            {
+                "name": "get_kb",
+                "description": "Get knowledge base information: CVEs, techniques, and detection capabilities.",
+                "inputSchema": {"type": "object", "properties": {}},
+            },
+        ],
+        "authentication": {"type": "bearer", "description": "Use your RedBrain API key"},
+    }
+
+
 @app.get("/api/health")
 async def health() -> dict[str, Any]:
     from .core.llm_client import llm

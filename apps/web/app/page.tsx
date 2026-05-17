@@ -266,6 +266,12 @@ export default function Home() {
           >
             Knowledge Base →
           </a>
+          <a
+            href="/developers"
+            className="text-xs text-[var(--color-text-dim)] hover:text-green-400 transition-colors underline underline-offset-4"
+          >
+            API / MCP →
+          </a>
         </div>
       </div>
     </main>
