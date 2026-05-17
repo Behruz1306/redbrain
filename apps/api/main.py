@@ -300,7 +300,7 @@ async def brain_agents() -> dict[str, Any]:
     """Get GStack agent role definitions."""
     from pathlib import Path
 
-    roles_dir = Path(__file__).parent.parent.parent / ".claude" / "commands"
+    roles_dir = Path(__file__).parent / "roles"
     agents = []
 
     if roles_dir.exists():

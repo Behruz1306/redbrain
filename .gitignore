@@ -11,3 +11,4 @@ build/
 .env.local
 .DS_Store
 tmp/
+.claude/

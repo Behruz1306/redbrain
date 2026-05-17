@@ -36,7 +36,6 @@ RUN pip install --no-cache-dir . 2>/dev/null || pip install --no-cache-dir -e .
 
 # Copy backend
 COPY apps/api apps/api
-COPY .claude/commands .claude/commands
 
 # Copy built frontend
 COPY --from=frontend-build /app/web/.next apps/web/.next
