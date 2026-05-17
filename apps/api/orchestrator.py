@@ -23,9 +23,9 @@ class ScanOrchestrator:
         self.repo_url = repo_url
         self.deployed_url = deployed_url
         self.sast = SASTAgent(scan_id, repo_url)
-        self.recon = ReconAgent(scan_id, deployed_url)
+        self.recon = ReconAgent(scan_id, deployed_url) if deployed_url else None
         self.correlate = CorrelateAgent(scan_id)
-        self.exploit = ExploitAgent(scan_id, deployed_url)
+        self.exploit = ExploitAgent(scan_id, deployed_url) if deployed_url else None
         self.report = ReportAgent(scan_id)
 
     async def run(self) -> None:
@@ -41,9 +41,13 @@ class ScanOrchestrator:
             })
 
     async def _run_pipeline(self) -> None:
+        code_only = not self.deployed_url
+        scan_mode = "Code-Only (SAST)" if code_only else "Full (SAST + DAST)"
+
         await event_bus.emit(self.scan_id, "scan:started", {
             "repo_url": self.repo_url,
-            "deployed_url": self.deployed_url,
+            "deployed_url": self.deployed_url or "(code-only mode)",
+            "scan_mode": scan_mode,
         })
 
         # Emit brain knowledge context
@@ -56,35 +60,105 @@ class ScanOrchestrator:
 
         await event_bus.emit(self.scan_id, "agent:reasoning", {
             "agent": "orchestrator",
-            "thought": f"Starting scan pipeline. Brain has {knowledge['total_scans']} prior scans and {knowledge['total_patterns']} known vulnerability patterns.",
+            "thought": f"Starting {scan_mode} pipeline. Brain has {knowledge['total_scans']} prior scans and {knowledge['total_patterns']} known vulnerability patterns.",
         })
 
-        # Phase 1: SAST + Recon in parallel
-        await event_bus.emit(self.scan_id, "agent:reasoning", {
-            "agent": "orchestrator",
-            "thought": "Phase 1: Launching SAST and Recon agents in parallel for maximum coverage",
-        })
+        if code_only:
+            # Code-only mode: SAST only, no recon/exploit
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "orchestrator",
+                "thought": "Code-only mode: Running deep SAST analysis with 16 detectors + AI deep analysis. No deployed URL = no DAST.",
+            })
+            sast_result = await self.sast.run()
+            recon_result: list[Any] = []
+            correlations: list[Any] = []
 
-        sast_result, recon_result = await asyncio.gather(
-            self.sast.run(),
-            self.recon.run(),
-        )
+            # Generate vulns from SAST findings directly
+            vulnerabilities: list[Any] = []
+            exploits: list[Any] = []
+            from .core.models import Vulnerability, Severity, VulnClass, VulnStatus
+            severity_map = {
+                "raw_sql": Severity.CRITICAL,
+                "command_injection": Severity.CRITICAL,
+                "ssti": Severity.CRITICAL,
+                "nosql_injection": Severity.CRITICAL,
+                "ssrf": Severity.HIGH,
+                "path_traversal": Severity.HIGH,
+                "jwt_vulnerability": Severity.HIGH,
+                "prototype_pollution": Severity.HIGH,
+                "race_condition": Severity.HIGH,
+                "eval_user_input": Severity.HIGH,
+                "unsafe_deserialization": Severity.HIGH,
+                "missing_auth": Severity.MEDIUM,
+                "mass_assignment": Severity.MEDIUM,
+                "open_redirect": Severity.MEDIUM,
+                "insecure_crypto": Severity.MEDIUM,
+                "hardcoded_secrets": Severity.MEDIUM,
+            }
+            class_map = {
+                "raw_sql": VulnClass.SQLI,
+                "command_injection": VulnClass.COMMAND_INJECTION,
+                "ssti": VulnClass.SSTI,
+                "nosql_injection": VulnClass.NOSQL_INJECTION,
+                "ssrf": VulnClass.SSRF,
+                "path_traversal": VulnClass.PATH_TRAVERSAL,
+                "jwt_vulnerability": VulnClass.JWT_VULN,
+                "prototype_pollution": VulnClass.PROTOTYPE_POLLUTION,
+                "race_condition": VulnClass.RACE_CONDITION,
+                "eval_user_input": VulnClass.XSS,
+                "unsafe_deserialization": VulnClass.DESERIALIZATION,
+                "missing_auth": VulnClass.BROKEN_AUTH,
+                "mass_assignment": VulnClass.MASS_ASSIGNMENT,
+                "open_redirect": VulnClass.OPEN_REDIRECT,
+                "insecure_crypto": VulnClass.INSECURE_CRYPTO,
+                "hardcoded_secrets": VulnClass.INFO_DISCLOSURE,
+            }
+            for func in sast_result:
+                for signal in func.risk_signals:
+                    vuln_class = class_map.get(signal, VulnClass.INFO_DISCLOSURE)
+                    sev = severity_map.get(signal, Severity.MEDIUM)
+                    vuln = Vulnerability(
+                        vuln_class=vuln_class,
+                        severity=sev,
+                        status=VulnStatus.SUSPECTED,
+                        confidence=0.7,
+                        function_id=func.id,
+                        title=f"{signal.replace('_', ' ').title()} in {func.name}",
+                        description=f"Detected {signal} pattern in {func.file_path}:{func.line}",
+                    )
+                    vulnerabilities.append(vuln)
 
-        await event_bus.emit(self.scan_id, "agent:reasoning", {
-            "agent": "orchestrator",
-            "thought": f"Phase 1 complete: {len(sast_result)} functions analyzed, {len(recon_result)} endpoints discovered. Moving to semantic correlation.",
-        })
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "orchestrator",
+                "thought": f"SAST complete: {len(sast_result)} functions, {len(vulnerabilities)} potential vulnerabilities found in code.",
+            })
+        else:
+            # Full mode: SAST + Recon in parallel
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "orchestrator",
+                "thought": "Phase 1: Launching SAST and Recon agents in parallel for maximum coverage",
+            })
 
-        # Phase 2: Correlation (heuristic + semantic)
-        correlations = await self.correlate.run(sast_result, recon_result)
+            sast_result, recon_result = await asyncio.gather(
+                self.sast.run(),
+                self.recon.run(),
+            )
 
-        # Phase 3: Exploitation
-        await event_bus.emit(self.scan_id, "agent:reasoning", {
-            "agent": "orchestrator",
-            "thought": f"Phase 3: Exploiting {len(correlations)} correlation links. Using ZeroEntropy to prioritize highest-impact payloads.",
-        })
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "orchestrator",
+                "thought": f"Phase 1 complete: {len(sast_result)} functions analyzed, {len(recon_result)} endpoints discovered. Moving to semantic correlation.",
+            })
 
-        vulnerabilities, exploits = await self.exploit.run(correlations, sast_result, recon_result)
+            # Phase 2: Correlation (heuristic + semantic)
+            correlations = await self.correlate.run(sast_result, recon_result)
+
+            # Phase 3: Exploitation
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "orchestrator",
+                "thought": f"Phase 3: Exploiting {len(correlations)} correlation links. Using ZeroEntropy to prioritize highest-impact payloads.",
+            })
+
+            vulnerabilities, exploits = await self.exploit.run(correlations, sast_result, recon_result)
 
         # Phase 3.5: AI Insights
         await event_bus.emit(self.scan_id, "agent:reasoning", {

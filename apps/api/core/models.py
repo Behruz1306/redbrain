@@ -43,7 +43,7 @@ class VulnStatus(str, Enum):
 
 class ScanRequest(BaseModel):
     repo_url: str
-    deployed_url: str
+    deployed_url: str = ""
 
 
 class ScanResponse(BaseModel):

@@ -10,11 +10,14 @@ interface BrainStats {
   total_patterns: number;
 }
 
+type ScanMode = "full" | "code_only";
+
 export default function Home() {
   const [repoUrl, setRepoUrl] = useState("");
   const [deployedUrl, setDeployedUrl] = useState("");
   const [loading, setLoading] = useState(false);
   const [stats, setStats] = useState<BrainStats | null>(null);
+  const [scanMode, setScanMode] = useState<ScanMode>("full");
   const router = useRouter();
 
   useEffect(() => {
@@ -34,7 +37,7 @@ export default function Home() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           repo_url: repoUrl,
-          deployed_url: deployedUrl,
+          deployed_url: scanMode === "full" ? deployedUrl : "",
         }),
       });
       const data = await res.json();
@@ -46,7 +49,7 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center px-4">
-      <div className="w-full max-w-2xl space-y-12">
+      <div className="w-full max-w-2xl space-y-10">
         {/* Logo */}
         <div className="text-center space-y-4">
           <h1 className="text-4xl font-bold tracking-tight">
@@ -55,8 +58,8 @@ export default function Home() {
             <span className="cursor-blink ml-1"></span>
           </h1>
           <p className="text-[var(--color-text-dim)] text-sm max-w-md mx-auto">
-            Autonomous AI security engineer powered by ZeroEntropy semantic intelligence.
-            SAST + DAST + knowledge graph in one brain.
+            Autonomous AI security engineer. 16 vulnerability detectors, 71 CVEs,
+            44 attack techniques. Powered by ZeroEntropy + Gemini + GBrain.
           </p>
           <div className="flex items-center justify-center gap-2 text-[9px] text-[var(--color-text-dim)] flex-wrap">
             <span className="px-2 py-0.5 rounded border border-purple-800/50 text-purple-400">GStack</span>
@@ -66,6 +69,30 @@ export default function Home() {
             <span className="px-2 py-0.5 rounded border border-orange-800/50 text-orange-400">The Hog</span>
             <span className="px-2 py-0.5 rounded border border-cyan-800/50 text-cyan-400">Jo/Camofox</span>
           </div>
+        </div>
+
+        {/* Scan Mode Selector */}
+        <div className="flex justify-center gap-2">
+          <button
+            onClick={() => setScanMode("full")}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+              scanMode === "full"
+                ? "bg-[var(--color-accent)] text-[var(--color-bg)]"
+                : "bg-[var(--color-surface)] text-[var(--color-text-dim)] border border-[var(--color-border)] hover:border-[var(--color-accent)]"
+            }`}
+          >
+            Full Scan (SAST + DAST)
+          </button>
+          <button
+            onClick={() => setScanMode("code_only")}
+            className={`px-4 py-2 rounded-lg text-xs font-semibold uppercase tracking-wider transition-all ${
+              scanMode === "code_only"
+                ? "bg-purple-600 text-white"
+                : "bg-[var(--color-surface)] text-[var(--color-text-dim)] border border-[var(--color-border)] hover:border-purple-500"
+            }`}
+          >
+            Code-Only (GitHub)
+          </button>
         </div>
 
         {/* Scan Form */}
@@ -84,36 +111,97 @@ export default function Home() {
                 className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] transition-colors"
               />
             </div>
-            <div className="relative">
-              <label className="block text-xs text-[var(--color-text-dim)] mb-1.5 uppercase tracking-wider">
-                Deployed URL
-              </label>
-              <input
-                type="url"
-                value={deployedUrl}
-                onChange={(e) => setDeployedUrl(e.target.value)}
-                placeholder="https://benjamin11133-juice-shop.hf.space"
-                required
-                className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] transition-colors"
-              />
-            </div>
+            {scanMode === "full" && (
+              <div className="relative">
+                <label className="block text-xs text-[var(--color-text-dim)] mb-1.5 uppercase tracking-wider">
+                  Deployed URL
+                </label>
+                <input
+                  type="url"
+                  value={deployedUrl}
+                  onChange={(e) => setDeployedUrl(e.target.value)}
+                  placeholder="https://benjamin11133-juice-shop.hf.space"
+                  required
+                  className="w-full bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg px-4 py-3 text-sm text-[var(--color-text)] placeholder:text-[var(--color-text-dim)] focus:outline-none focus:border-[var(--color-accent)] focus:ring-1 focus:ring-[var(--color-accent)] transition-colors"
+                />
+              </div>
+            )}
+            {scanMode === "code_only" && (
+              <div className="bg-purple-900/20 border border-purple-800/30 rounded-lg p-3">
+                <p className="text-xs text-purple-300">
+                  Code-only mode: RedBrain will clone the repository and run deep static analysis
+                  with 16 detectors + AI-powered complex vulnerability detection. No deployment needed.
+                </p>
+              </div>
+            )}
           </div>
 
           <button
             type="submit"
             disabled={loading}
-            className="w-full bg-[var(--color-accent)] text-[var(--color-bg)] font-semibold py-3 rounded-lg text-sm uppercase tracking-wider hover:brightness-110 transition-all disabled:opacity-50 disabled:cursor-not-allowed glow-pulse"
+            className={`w-full font-semibold py-3 rounded-lg text-sm uppercase tracking-wider transition-all disabled:opacity-50 disabled:cursor-not-allowed glow-pulse ${
+              scanMode === "full"
+                ? "bg-[var(--color-accent)] text-[var(--color-bg)] hover:brightness-110"
+                : "bg-purple-600 text-white hover:bg-purple-500"
+            }`}
           >
-            {loading ? "[ INITIALIZING AI AGENTS... ]" : "[ START AI SCAN ]"}
+            {loading
+              ? "[ INITIALIZING AI AGENTS... ]"
+              : scanMode === "full"
+              ? "[ START FULL AI SCAN ]"
+              : "[ ANALYZE CODE ]"}
           </button>
         </form>
+
+        {/* Quick Targets */}
+        <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+          <div className="text-xs font-semibold text-[var(--color-text-dim)] uppercase tracking-wider">
+            Quick Targets (click to fill)
+          </div>
+          <div className="grid grid-cols-1 gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setRepoUrl("https://github.com/juice-shop/juice-shop");
+                setDeployedUrl("https://benjamin11133-juice-shop.hf.space");
+                setScanMode("full");
+              }}
+              className="text-left px-3 py-2 rounded bg-[var(--color-bg)] border border-[var(--color-border)] hover:border-[var(--color-accent)] transition-colors"
+            >
+              <div className="text-xs font-medium text-[var(--color-text)]">OWASP Juice Shop</div>
+              <div className="text-[10px] text-[var(--color-text-dim)]">Full scan — intentionally vulnerable Node.js app (OWASP Top 10)</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRepoUrl("https://github.com/OWASP/NodeGoat");
+                setScanMode("code_only");
+              }}
+              className="text-left px-3 py-2 rounded bg-[var(--color-bg)] border border-[var(--color-border)] hover:border-purple-500 transition-colors"
+            >
+              <div className="text-xs font-medium text-purple-300">OWASP NodeGoat</div>
+              <div className="text-[10px] text-[var(--color-text-dim)]">Code-only — vulnerable Node.js app for learning OWASP risks</div>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setRepoUrl("https://github.com/payloadbox/xss-payload-list");
+                setScanMode("code_only");
+              }}
+              className="text-left px-3 py-2 rounded bg-[var(--color-bg)] border border-[var(--color-border)] hover:border-purple-500 transition-colors"
+            >
+              <div className="text-xs font-medium text-purple-300">XSS Payload Collection</div>
+              <div className="text-[10px] text-[var(--color-text-dim)]">Code-only — Analyze XSS payloads and patterns</div>
+            </button>
+          </div>
+        </div>
 
         {/* Feature cards */}
         <div className="grid grid-cols-3 gap-3">
           {[
             {
               title: "Semantic SAST",
-              desc: "AI-powered static analysis with CVE matching via ZeroEntropy + Gemini validation",
+              desc: "16 detectors + AI deep analysis. CVE matching via ZeroEntropy + Gemini validation",
               badge: "zembed-1",
             },
             {
@@ -147,26 +235,36 @@ export default function Home() {
         {/* Live Stats */}
         <div className="flex justify-center gap-8 text-xs text-[var(--color-text-dim)]">
           <span>
-            Scans completed:{" "}
+            CVEs loaded:{" "}
+            <span className="text-[var(--color-text)]">71</span>
+          </span>
+          <span>
+            Techniques:{" "}
+            <span className="text-[var(--color-text)]">44</span>
+          </span>
+          <span>
+            Detectors:{" "}
+            <span className="text-[var(--color-text)]">16</span>
+          </span>
+          <span>
+            Scans:{" "}
             <span className="text-[var(--color-text)]">{stats?.total_scans ?? "..."}</span>
-          </span>
-          <span>
-            Knowledge pages:{" "}
-            <span className="text-[var(--color-text)]">{stats?.gbrain_pages ?? "..."}</span>
-          </span>
-          <span>
-            Embeddings:{" "}
-            <span className="text-[var(--color-text)]">{stats?.embedding_corpus_size ?? "..."}</span>
           </span>
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-center">
+        <div className="flex justify-center gap-6">
           <a
             href="/brain"
             className="text-xs text-[var(--color-text-dim)] hover:text-[var(--color-accent)] transition-colors underline underline-offset-4"
           >
-            Explore Brain Graph →
+            Brain Graph →
+          </a>
+          <a
+            href="/kb"
+            className="text-xs text-[var(--color-text-dim)] hover:text-purple-400 transition-colors underline underline-offset-4"
+          >
+            Knowledge Base →
           </a>
         </div>
       </div>

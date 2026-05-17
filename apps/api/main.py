@@ -165,6 +165,55 @@ async def brain_knowledge() -> dict[str, Any]:
     }
 
 
+@app.get("/api/brain/kb")
+async def brain_kb() -> dict[str, Any]:
+    """Full knowledge base: CVEs, techniques, detectors."""
+    import json as _json
+    from pathlib import Path
+
+    seed_dir = Path(__file__).parent / "seed"
+    cves = _json.loads((seed_dir / "cves.json").read_text())
+    adv_path = seed_dir / "advanced_cves.json"
+    if adv_path.exists():
+        cves.extend(_json.loads(adv_path.read_text()))
+    techniques = _json.loads((seed_dir / "techniques.json").read_text())
+
+    detectors = [
+        {"name": "SQL Injection", "id": "raw_sql", "category": "injection"},
+        {"name": "XSS / Eval", "id": "eval_user_input", "category": "injection"},
+        {"name": "Command Injection", "id": "command_injection", "category": "injection"},
+        {"name": "NoSQL Injection", "id": "nosql_injection", "category": "injection"},
+        {"name": "SSTI", "id": "ssti", "category": "injection"},
+        {"name": "SSRF", "id": "ssrf", "category": "network"},
+        {"name": "Path Traversal", "id": "path_traversal", "category": "file"},
+        {"name": "Open Redirect", "id": "open_redirect", "category": "network"},
+        {"name": "Prototype Pollution", "id": "prototype_pollution", "category": "logic"},
+        {"name": "JWT Vulnerabilities", "id": "jwt_vulnerability", "category": "auth"},
+        {"name": "Race Condition", "id": "race_condition", "category": "logic"},
+        {"name": "Mass Assignment", "id": "mass_assignment", "category": "logic"},
+        {"name": "Insecure Crypto", "id": "insecure_crypto", "category": "crypto"},
+        {"name": "Hardcoded Secrets", "id": "hardcoded_secrets", "category": "crypto"},
+        {"name": "Missing Auth", "id": "missing_auth", "category": "auth"},
+        {"name": "Unsafe Deserialization", "id": "unsafe_deserialization", "category": "injection"},
+    ]
+
+    vuln_classes = list({c["class"] for c in cves})
+    technique_classes = list({t["class"] for t in techniques})
+
+    return {
+        "cves": cves,
+        "techniques": techniques,
+        "detectors": detectors,
+        "stats": {
+            "total_cves": len(cves),
+            "total_techniques": len(techniques),
+            "total_detectors": len(detectors),
+            "vuln_classes": sorted(set(vuln_classes + technique_classes)),
+            "total_payloads": sum(len(t["payloads"]) for t in techniques),
+        },
+    }
+
+
 @app.get("/api/brain/agents")
 async def brain_agents() -> dict[str, Any]:
     """Get GStack agent role definitions."""
