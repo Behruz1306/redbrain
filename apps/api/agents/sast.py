@@ -20,6 +20,16 @@ from ..patterns.sast import (
     raw_sql,
     unsafe_deserialization,
 )
+from ..patterns.sast import ssrf
+from ..patterns.sast import prototype_pollution
+from ..patterns.sast import jwt_vulnerabilities
+from ..patterns.sast import path_traversal
+from ..patterns.sast import nosql_injection
+from ..patterns.sast import ssti
+from ..patterns.sast import race_condition
+from ..patterns.sast import mass_assignment
+from ..patterns.sast import insecure_crypto
+from ..patterns.sast import open_redirect
 
 DETECTORS = [
     ("raw_sql", raw_sql.detect),
@@ -28,6 +38,16 @@ DETECTORS = [
     ("missing_auth", missing_auth.detect),
     ("unsafe_deserialization", unsafe_deserialization.detect),
     ("command_injection", command_injection.detect),
+    ("ssrf", ssrf.detect),
+    ("prototype_pollution", prototype_pollution.detect),
+    ("jwt_vulnerability", jwt_vulnerabilities.detect),
+    ("path_traversal", path_traversal.detect),
+    ("nosql_injection", nosql_injection.detect),
+    ("ssti", ssti.detect),
+    ("race_condition", race_condition.detect),
+    ("mass_assignment", mass_assignment.detect),
+    ("insecure_crypto", insecure_crypto.detect),
+    ("open_redirect", open_redirect.detect),
 ]
 
 SKIP_DIRS = {
@@ -49,7 +69,7 @@ class SASTAgent:
     async def run(self) -> list[FunctionInfo]:
         await event_bus.emit(self.scan_id, "agent:reasoning", {
             "agent": "sast",
-            "thought": f"Cloning {self.repo_url} for static analysis. Will apply 6 detectors: SQL injection, eval, hardcoded secrets, missing auth, unsafe deserialization, command injection.",
+            "thought": f"Cloning {self.repo_url} for deep static analysis. Running {len(DETECTORS)} detectors: SQLi, XSS, SSRF, prototype pollution, JWT attacks, path traversal, NoSQL injection, SSTI, race conditions, mass assignment, insecure crypto, open redirect, command injection, secrets, deserialization.",
         })
 
         clone_dir = tempfile.mkdtemp(prefix=f"redbrain-{self.scan_id}-")
@@ -122,13 +142,21 @@ class SASTAgent:
         if llm.available and high_risk:
             await event_bus.emit(self.scan_id, "agent:reasoning", {
                 "agent": "sast",
-                "thought": f"Phase 3: Using {llm.provider} to validate top {min(5, len(high_risk))} findings and assess real exploitability.",
+                "thought": f"Phase 3: Using {llm.provider} to validate top {min(8, len(high_risk))} findings and assess real exploitability.",
             })
-            await self._ai_validate(high_risk[:5])
+            await self._ai_validate(high_risk[:8])
+
+        # Phase 4: AI deep analysis for complex vulns (business logic, race conditions, auth flaws)
+        if llm.available and len(self.functions) > 0:
+            await event_bus.emit(self.scan_id, "agent:reasoning", {
+                "agent": "sast",
+                "thought": f"Phase 4: Deep AI analysis — scanning for complex vulnerabilities that regex cannot detect: business logic flaws, race conditions, insecure auth flows, privilege escalation paths...",
+            })
+            await self._ai_deep_analysis()
 
         await event_bus.emit(self.scan_id, "sast:complete", {
             "total_functions": len(self.functions),
-            "high_risk_count": len(high_risk),
+            "high_risk_count": len([f for f in self.functions if f.risk_signals]),
             "ai_provider": llm.provider,
         })
 
@@ -177,6 +205,55 @@ class SASTAgent:
                         "function": func.name,
                         "signals": func.risk_signals,
                         "ai_assessment": response.strip()[:200],
+                    })
+            except Exception:
+                continue
+
+    async def _ai_deep_analysis(self) -> None:
+        """Use LLM to find complex vulnerabilities that regex detectors miss."""
+        candidates = [f for f in self.functions if not f.risk_signals]
+        interesting = [
+            f for f in candidates
+            if any(kw in f.source_code.lower() for kw in (
+                "password", "auth", "token", "session", "cookie", "admin",
+                "balance", "transfer", "payment", "price", "role", "permission",
+                "redirect", "url", "file", "path", "upload", "download",
+                "crypto", "hash", "encrypt", "sign", "verify", "secret",
+                "query", "find", "delete", "update", "create",
+            ))
+        ]
+
+        batch = interesting[:10]
+        if not batch:
+            return
+
+        for func in batch:
+            try:
+                prompt = (
+                    f"You are an elite security researcher. Analyze this function for complex vulnerabilities "
+                    f"that automated scanners miss.\n\n"
+                    f"Function: {func.name}\nFile: {func.file_path}\nLine: {func.line}\n"
+                    f"Code:\n```\n{func.source_code[:800]}\n```\n\n"
+                    f"Look specifically for:\n"
+                    f"1. Race conditions (TOCTOU, check-then-act without locks)\n"
+                    f"2. Business logic flaws (negative amounts, skipped steps, privilege escalation)\n"
+                    f"3. Insecure authentication (weak comparison, timing attacks, token prediction)\n"
+                    f"4. Authorization bypass (missing role checks, IDOR patterns)\n"
+                    f"5. Cryptographic issues (weak algorithms, predictable IVs, static keys)\n"
+                    f"6. Injection via complex data flows (second-order, serialization)\n\n"
+                    f"Respond with JSON: {{\"vulnerable\": true/false, \"signals\": [\"signal_name\"], \"confidence\": 0-100, \"description\": \"...\"}}"
+                )
+                result = await llm.ask_json("sast", prompt)
+
+                if result.get("vulnerable") and result.get("confidence", 0) >= 60:
+                    signals = result.get("signals", ["ai_detected_complex_vuln"])
+                    func.risk_signals.extend(signals)
+                    await event_bus.emit(self.scan_id, "ai:deep_analysis", {
+                        "function": func.name,
+                        "file": func.file_path,
+                        "signals": signals,
+                        "confidence": result.get("confidence"),
+                        "description": result.get("description", "")[:200],
                     })
             except Exception:
                 continue

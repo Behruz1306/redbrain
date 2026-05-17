@@ -21,6 +21,18 @@ class VulnClass(str, Enum):
     IDOR = "idor"
     BROKEN_AUTH = "broken_auth"
     INFO_DISCLOSURE = "info_disclosure"
+    SSRF = "ssrf"
+    PROTOTYPE_POLLUTION = "prototype_pollution"
+    JWT_VULN = "jwt_vuln"
+    PATH_TRAVERSAL = "path_traversal"
+    NOSQL_INJECTION = "nosql_injection"
+    SSTI = "ssti"
+    RACE_CONDITION = "race_condition"
+    MASS_ASSIGNMENT = "mass_assignment"
+    INSECURE_CRYPTO = "insecure_crypto"
+    OPEN_REDIRECT = "open_redirect"
+    DESERIALIZATION = "deserialization"
+    COMMAND_INJECTION = "command_injection"
 
 
 class VulnStatus(str, Enum):

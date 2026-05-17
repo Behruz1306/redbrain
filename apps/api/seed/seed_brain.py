@@ -21,7 +21,12 @@ _seeded = False
 
 async def seed_cves() -> int:
     cves = json.loads((SEED_DIR / "cves.json").read_text())
-    logger.info(f"Seeding {len(cves)} CVEs...")
+
+    advanced_path = SEED_DIR / "advanced_cves.json"
+    if advanced_path.exists():
+        cves.extend(json.loads(advanced_path.read_text()))
+
+    logger.info(f"Seeding {len(cves)} CVEs (core + advanced)...")
 
     for cve in cves:
         content = f"{cve['description']}\n\nCVSS: {cve['cvss_score']}\nCWE: {cve['cwe']}\nPoC: {cve['poc_code']}"

