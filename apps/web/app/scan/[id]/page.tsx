@@ -157,6 +157,20 @@ export default function ScanPage({ params }: { params: Promise<{ id: string }> }
       const thought = `[ai/correlate] ${event.payload.function} → ${event.payload.endpoint}: ${event.payload.insight}`;
       setReasoning((prev) => [...prev.slice(-14), thought]);
     }
+    if (event.type === "ai:deep_analysis") {
+      const thought = `[ai/deep] FOUND: ${event.payload.function} (${event.payload.file}) — ${event.payload.description}`;
+      setReasoning((prev) => [...prev.slice(-14), thought]);
+      setSastLogs((prev) => [...prev, {
+        timestamp: new Date().toISOString(),
+        type: "AI-DEEP",
+        message: `${event.payload.function}: ${(event.payload.signals as string[])?.join(", ")} (${event.payload.confidence}% confidence)`,
+        severity: "critical",
+      }]);
+    }
+    if (event.type === "remediate:fix_generated") {
+      const thought = `[ai/fix] Generated code fix for: ${event.payload.title}`;
+      setReasoning((prev) => [...prev.slice(-14), thought]);
+    }
 
     // Brain context
     if (event.type === "brain:context") {

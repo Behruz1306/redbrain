@@ -114,7 +114,15 @@ export default function BrainPage() {
 
         {activeTab === "knowledge" && (
           <div className="p-6 max-w-3xl mx-auto space-y-6 overflow-y-auto h-full">
-            <h2 className="text-lg font-bold">Brain Knowledge Base</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-bold">Brain Knowledge Base</h2>
+              <a
+                href="/kb"
+                className="px-3 py-1.5 text-[10px] font-semibold uppercase rounded bg-purple-900/30 border border-purple-700/50 text-purple-300 hover:bg-purple-900/50 transition-colors"
+              >
+                Explore Full KB →
+              </a>
+            </div>
 
             {knowledge ? (
               <div className="grid grid-cols-2 gap-4">
@@ -146,6 +154,29 @@ export default function BrainPage() {
             ) : (
               <div className="text-[var(--color-text-dim)]">Loading...</div>
             )}
+
+            {/* KB Summary */}
+            <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4 space-y-3">
+              <div className="text-xs font-semibold uppercase text-[var(--color-text-dim)]">Loaded Knowledge</div>
+              <div className="grid grid-cols-4 gap-3 text-center">
+                <div>
+                  <div className="text-xl font-bold text-red-400">71</div>
+                  <div className="text-[9px] text-[var(--color-text-dim)]">CVEs</div>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-orange-400">44</div>
+                  <div className="text-[9px] text-[var(--color-text-dim)]">Techniques</div>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-green-400">16</div>
+                  <div className="text-[9px] text-[var(--color-text-dim)]">Detectors</div>
+                </div>
+                <div>
+                  <div className="text-xl font-bold text-blue-400">200+</div>
+                  <div className="text-[9px] text-[var(--color-text-dim)]">Payloads</div>
+                </div>
+              </div>
+            </div>
 
             {knowledge && knowledge.vuln_classes_seen.length > 0 && (
               <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-4">
