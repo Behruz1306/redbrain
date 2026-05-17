@@ -1,0 +1,102 @@
+[
+  {
+    "id": "A01:2021",
+    "name": "Broken Access Control",
+    "description": "Access control enforces policy such that users cannot act outside of their intended permissions. Failures typically lead to unauthorized information disclosure, modification, or destruction of all data or performing a business function outside the user's limits.",
+    "cwes": ["CWE-200", "CWE-201", "CWE-352", "CWE-566", "CWE-639", "CWE-862", "CWE-863"],
+    "vuln_classes": ["idor", "broken_auth", "mass_assignment"],
+    "prevalence": "94% of applications tested had some form of broken access control",
+    "impact": "Attackers can access unauthorized functionality and data, view other users' accounts, modify access rights",
+    "prevention": ["Deny by default except for public resources", "Implement access control mechanisms once and re-use throughout the application", "Model access controls should enforce record ownership", "Disable web server directory listing", "Log access control failures, alert admins"]
+  },
+  {
+    "id": "A02:2021",
+    "name": "Cryptographic Failures",
+    "description": "Formerly Sensitive Data Exposure. Focuses on failures related to cryptography which often lead to exposure of sensitive data. Includes use of weak algorithms, insufficient key lengths, poor key management, and transmission of data in clear text.",
+    "cwes": ["CWE-259", "CWE-327", "CWE-331", "CWE-321", "CWE-328"],
+    "vuln_classes": ["insecure_crypto", "info_disclosure"],
+    "prevalence": "Failures frequently result in exposure of PII, health records, credentials, business secrets",
+    "impact": "Exposure of sensitive data through weak crypto, leading to compliance violations and data breaches",
+    "prevention": ["Classify data processed, stored, or transmitted", "Don't store sensitive data unnecessarily", "Encrypt all sensitive data at rest", "Use strong standard algorithms and proper key management", "Disable caching for sensitive responses"]
+  },
+  {
+    "id": "A03:2021",
+    "name": "Injection",
+    "description": "An application is vulnerable when user-supplied data is not validated, filtered, or sanitized, hostile data is used within dynamic queries or commands, or object-relational mapping parameters are used without sanitization.",
+    "cwes": ["CWE-79", "CWE-89", "CWE-73", "CWE-77", "CWE-78", "CWE-917"],
+    "vuln_classes": ["sqli", "xss", "command_injection", "nosql_injection", "ssti"],
+    "prevalence": "94% of applications were tested for some form of injection with max incidence rate of 19%",
+    "impact": "Data loss, corruption, disclosure to unauthorized parties, denial of access, complete host takeover",
+    "prevention": ["Use parameterized queries/prepared statements", "Use positive server-side input validation", "Escape special characters for residual dynamic queries", "Use LIMIT and other SQL controls to prevent mass disclosure"]
+  },
+  {
+    "id": "A04:2021",
+    "name": "Insecure Design",
+    "description": "A new category for 2021, focusing on risks related to design and architectural flaws. Insecure design cannot be fixed by a perfect implementation as the necessary security controls were never created to defend against specific attacks.",
+    "cwes": ["CWE-209", "CWE-256", "CWE-501", "CWE-522"],
+    "vuln_classes": ["broken_auth", "race_condition"],
+    "prevalence": "Represents a broad category requiring threat modeling, secure design patterns, and reference architectures",
+    "impact": "Business logic flaws, missing security controls, inadequate threat modeling leading to exploitable weaknesses",
+    "prevention": ["Establish secure development lifecycle", "Use threat modeling for critical authentication, access control, business logic", "Integrate security language and controls into user stories", "Write unit and integration tests to validate critical flows are resistant to threat model"]
+  },
+  {
+    "id": "A05:2021",
+    "name": "Security Misconfiguration",
+    "description": "The application might be vulnerable if it is missing appropriate security hardening, has improperly configured permissions on cloud services, has unnecessary features enabled, uses default accounts and passwords, or error handling reveals stack traces.",
+    "cwes": ["CWE-16", "CWE-611"],
+    "vuln_classes": ["info_disclosure", "broken_auth"],
+    "prevalence": "90% of applications tested for misconfiguration with average incidence rate of 4.5%",
+    "impact": "Unauthorized access to system data or functionality, occasionally complete system compromise",
+    "prevention": ["Repeatable hardening process for fast, locked-down environments", "Minimal platform without unnecessary features", "Review and update configurations as part of patch management", "Segmented application architecture", "Automated process to verify effectiveness of configurations"]
+  },
+  {
+    "id": "A06:2021",
+    "name": "Vulnerable and Outdated Components",
+    "description": "Components run with same privileges as the application. If a vulnerable component is exploited, it can cause serious data loss or server takeover. Applications using known vulnerable components undermine defenses.",
+    "cwes": ["CWE-1104"],
+    "vuln_classes": ["command_injection", "info_disclosure"],
+    "prevalence": "Average CVE per component in most applications; known vulnerable components are extremely common",
+    "impact": "Can range from minimal to complete machine compromise and data exfiltration",
+    "prevention": ["Remove unused dependencies and features", "Continuously inventory component versions", "Monitor CVE databases for vulnerabilities", "Obtain components from official sources over secure links", "Monitor for unmaintained libraries"]
+  },
+  {
+    "id": "A07:2021",
+    "name": "Identification and Authentication Failures",
+    "description": "Confirmation of the user's identity, authentication, and session management is critical. Authentication weaknesses include permitting brute force attacks, weak passwords, improper session handling, and credential stuffing.",
+    "cwes": ["CWE-287", "CWE-384", "CWE-798"],
+    "vuln_classes": ["broken_auth", "jwt_vuln"],
+    "prevalence": "Standardized frameworks have helped but issues persist especially around token management and MFA",
+    "impact": "Attackers gain access to user accounts, admin systems, and the ability to assume other users' identities",
+    "prevention": ["Implement multi-factor authentication", "Don't ship with default credentials", "Implement weak-password checks", "Harden credential recovery paths", "Limit or delay failed login attempts", "Use server-side session manager with high-entropy session ID"]
+  },
+  {
+    "id": "A08:2021",
+    "name": "Software and Data Integrity Failures",
+    "description": "Relates to code and infrastructure that does not protect against integrity violations. Examples include auto-update without integrity verification, insecure CI/CD pipelines, and insecure deserialization.",
+    "cwes": ["CWE-502", "CWE-829"],
+    "vuln_classes": ["deserialization", "prototype_pollution"],
+    "prevalence": "New category including insecure deserialization from 2017 and supply chain attacks",
+    "impact": "Supply chain compromise, remote code execution via deserialization, CI/CD pipeline manipulation",
+    "prevention": ["Use digital signatures to verify software/data from expected source", "Ensure libraries consume trusted repositories", "Use software supply chain security tools", "Ensure CI/CD pipeline has proper segregation, configuration, and access control", "Don't send unsigned/unencrypted serialized data to untrusted clients"]
+  },
+  {
+    "id": "A09:2021",
+    "name": "Security Logging and Monitoring Failures",
+    "description": "Without logging and monitoring, breaches cannot be detected. Insufficient logging, detection, monitoring, and active response occurs any time auditable events are not logged or alerts are not triggered.",
+    "cwes": ["CWE-117", "CWE-223", "CWE-532", "CWE-778"],
+    "vuln_classes": ["info_disclosure"],
+    "prevalence": "This category is included to help detect, escalate, and respond to active breaches",
+    "impact": "Inability to detect attacks and breaches, enabling attackers to persist, pivot, and extract/destroy data",
+    "prevention": ["Ensure login failures, access control failures, and server-side input validation failures are logged", "Ensure logs are in a format easily consumed by log management solutions", "Ensure high-value transactions have an audit trail", "Establish effective monitoring and alerting for suspicious activities"]
+  },
+  {
+    "id": "A10:2021",
+    "name": "Server-Side Request Forgery (SSRF)",
+    "description": "SSRF flaws occur whenever a web application fetches a remote resource without validating the user-supplied URL. It allows an attacker to coerce the application to send a crafted request to an unexpected destination.",
+    "cwes": ["CWE-918"],
+    "vuln_classes": ["ssrf"],
+    "prevalence": "New category added due to industry survey data showing increasing SSRF attacks especially in cloud environments",
+    "impact": "Access internal services behind firewalls, cloud metadata services, internal port scanning, remote code execution",
+    "prevention": ["Segment remote resource access from network layer", "Enforce 'deny by default' firewall policies", "Sanitize and validate all client-supplied input data", "Disable HTTP redirections", "Don't deploy other security services on front systems"]
+  }
+]

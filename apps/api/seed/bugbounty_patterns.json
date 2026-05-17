@@ -1,0 +1,167 @@
+[
+  {
+    "id": "BB-001",
+    "name": "Account Takeover via Password Reset Poisoning",
+    "category": "broken_auth",
+    "severity": "critical",
+    "bounty_range": "$3000-$15000",
+    "description": "Manipulate Host header during password reset to redirect the reset link to attacker-controlled domain. User clicks link in email, token sent to attacker.",
+    "steps": ["Intercept POST /forgot-password", "Modify Host header to attacker.com", "User receives email with link to attacker.com/reset?token=XXX", "Attacker captures token, resets password"],
+    "detection": ["Host header manipulation in password reset flow", "No validation of Host header against allowed origins"],
+    "platforms_found": ["Uber", "Slack", "GitLab"]
+  },
+  {
+    "id": "BB-002",
+    "name": "OAuth Token Theft via Open Redirect",
+    "category": "broken_auth",
+    "severity": "critical",
+    "bounty_range": "$5000-$25000",
+    "description": "Chain open redirect with OAuth flow to steal access tokens. redirect_uri validation bypassed via subdomain or path traversal.",
+    "steps": ["Find open redirect on target domain", "Craft OAuth URL with redirect_uri=target.com/redirect?url=attacker.com", "Victim authorizes, token sent to attacker via fragment or query"],
+    "detection": ["Open redirect endpoints", "Loose redirect_uri validation in OAuth config", "Wildcard subdomain in allowed redirects"],
+    "platforms_found": ["Facebook", "Microsoft", "Google"]
+  },
+  {
+    "id": "BB-003",
+    "name": "Race Condition in Payment/Transfer",
+    "category": "race_condition",
+    "severity": "critical",
+    "bounty_range": "$5000-$50000",
+    "description": "Exploit TOCTOU race condition in financial transactions. Send concurrent requests to withdraw/transfer more than available balance.",
+    "steps": ["Identify balance-deducting endpoint", "Send 50+ concurrent requests with same amount", "Backend checks balance before atomic deduction", "Multiple requests pass check before first deduction commits"],
+    "detection": ["Non-atomic balance check-then-deduct pattern", "No database-level locking on financial operations", "Async handlers without mutex/semaphore"],
+    "platforms_found": ["Starbucks", "PayPal", "Shopify"]
+  },
+  {
+    "id": "BB-004",
+    "name": "GraphQL Introspection + IDOR Combo",
+    "category": "idor",
+    "severity": "high",
+    "bounty_range": "$2000-$10000",
+    "description": "Use GraphQL introspection to discover hidden types and fields, then exploit missing authorization on object access.",
+    "steps": ["Query __schema to enumerate all types", "Find User/Admin types with sensitive fields", "Query other users' data without authorization check", "Access admin-only mutations via discovered schema"],
+    "detection": ["Introspection enabled in production", "Missing per-field authorization in resolvers", "IDOR in GraphQL queries"],
+    "platforms_found": ["Shopify", "GitLab", "HackerOne"]
+  },
+  {
+    "id": "BB-005",
+    "name": "SSRF to Cloud Metadata to RCE",
+    "category": "ssrf",
+    "severity": "critical",
+    "bounty_range": "$10000-$50000",
+    "description": "Chain SSRF to access cloud metadata service, extract IAM credentials, then use those creds to execute commands or access S3 buckets.",
+    "steps": ["Find SSRF via URL parameter or webhook", "Access http://169.254.169.254/latest/meta-data/iam/security-credentials/", "Extract AccessKeyId, SecretAccessKey, Token", "Use AWS CLI with stolen creds to access internal resources"],
+    "detection": ["Any user-controlled URL fetch without SSRF protection", "Application running on AWS/GCP/Azure with instance roles", "No IMDSv2 enforcement"],
+    "platforms_found": ["Capital One (2019 breach)", "Shopify", "GitLab"]
+  },
+  {
+    "id": "BB-006",
+    "name": "Prototype Pollution to XSS/RCE",
+    "category": "prototype_pollution",
+    "severity": "high",
+    "bounty_range": "$3000-$20000",
+    "description": "Pollute Object.prototype via merge/extend operations, then trigger XSS via DOM clobbering or RCE via server-side gadgets.",
+    "steps": ["Find endpoint that deep-merges user input", "Send __proto__[polluted]=true", "Find gadget: template engine reads from prototype", "Achieve XSS or RCE depending on gadget"],
+    "detection": ["Deep merge of user input without prototype filtering", "Libraries using recursive object assign", "Template engines reading arbitrary properties"],
+    "platforms_found": ["Kibana", "Ghost CMS", "npm registry"]
+  },
+  {
+    "id": "BB-007",
+    "name": "JWT Algorithm Confusion Attack",
+    "category": "jwt_vuln",
+    "severity": "critical",
+    "bounty_range": "$5000-$20000",
+    "description": "Switch JWT algorithm from RS256 to HS256. Server uses public key as HMAC secret, attacker signs arbitrary tokens.",
+    "steps": ["Obtain public key (/.well-known/jwks.json or certificate)", "Create JWT with alg:HS256, set claims to admin", "Sign with the public key as HMAC secret", "Server verifies HS256 signature using public key = valid"],
+    "detection": ["JWT library accepts multiple algorithms", "No strict algorithm enforcement on verification", "Public key accessible"],
+    "platforms_found": ["Auth0 (pre-fix)", "Various custom JWT implementations"]
+  },
+  {
+    "id": "BB-008",
+    "name": "Stored XSS via File Upload (SVG/HTML)",
+    "category": "xss",
+    "severity": "high",
+    "bounty_range": "$1000-$7500",
+    "description": "Upload SVG or HTML file containing JavaScript. When other users view the file, XSS executes in their browser context.",
+    "steps": ["Create SVG with embedded <script> tag", "Upload as profile picture or document", "File served from same origin without Content-Disposition: attachment", "Victim views file, XSS triggers"],
+    "detection": ["File upload without content-type validation", "Serving uploads from same origin", "No Content-Security-Policy on upload endpoints"],
+    "platforms_found": ["LinkedIn", "eBay", "Yahoo"]
+  },
+  {
+    "id": "BB-009",
+    "name": "Mass Assignment Privilege Escalation",
+    "category": "mass_assignment",
+    "severity": "high",
+    "bounty_range": "$2000-$10000",
+    "description": "Include admin/role fields in profile update request. Server blindly applies all fields from request body to database model.",
+    "steps": ["Update profile with normal fields", "Add role=admin or isAdmin=true to request body", "Server applies all fields without whitelist", "Attacker gains admin privileges"],
+    "detection": ["Object.assign(user, req.body) pattern", "No field whitelist on update operations", "ORM without explicit allowed fields"],
+    "platforms_found": ["GitHub", "Shopify", "various Rails apps"]
+  },
+  {
+    "id": "BB-010",
+    "name": "SSTI to RCE via Template Engine",
+    "category": "ssti",
+    "severity": "critical",
+    "bounty_range": "$5000-$25000",
+    "description": "Inject template syntax into user-controllable field that gets rendered server-side. Escalate from expression evaluation to command execution.",
+    "steps": ["Find input reflected in rendered page", "Test {{7*7}} — if 49 appears, SSTI confirmed", "Identify template engine (Jinja2, Twig, EJS, etc)", "Use engine-specific gadget chain to achieve RCE"],
+    "detection": ["User input passed to template render function", "render_template_string() with user data", "Template compilation from user-controlled source"],
+    "platforms_found": ["Uber", "Phabricator", "Various Flask apps"]
+  },
+  {
+    "id": "BB-011",
+    "name": "HTTP Request Smuggling (CL.TE)",
+    "category": "info_disclosure",
+    "severity": "critical",
+    "bounty_range": "$5000-$30000",
+    "description": "Exploit Content-Length vs Transfer-Encoding parsing differences between front-end and back-end servers to smuggle requests.",
+    "steps": ["Send request with both CL and TE headers", "Front-end uses CL, back-end uses TE (or vice versa)", "Smuggled request processed as next user's request prefix", "Capture other users' requests or bypass access controls"],
+    "detection": ["Multiple proxy layers with different HTTP parsers", "Both CL and TE headers accepted simultaneously", "No normalization between layers"],
+    "platforms_found": ["PayPal", "Slack", "Various CDN setups"]
+  },
+  {
+    "id": "BB-012",
+    "name": "NoSQL Injection Authentication Bypass",
+    "category": "nosql_injection",
+    "severity": "critical",
+    "bounty_range": "$3000-$15000",
+    "description": "Use MongoDB query operators in login request to bypass authentication. $ne, $gt operators always evaluate to true.",
+    "steps": ["Send login with {\"email\":{\"$ne\":\"\"},\"password\":{\"$ne\":\"\"}}", "MongoDB query matches first user where email != '' AND password != ''", "Returns first admin account typically", "Full authentication bypass"],
+    "detection": ["MongoDB/Mongoose queries built from user input", "No schema validation on login parameters", "Object type not enforced (allows operator injection)"],
+    "platforms_found": ["Various Node.js + MongoDB apps"]
+  },
+  {
+    "id": "BB-013",
+    "name": "Path Traversal to Source Code Disclosure",
+    "category": "path_traversal",
+    "severity": "high",
+    "bounty_range": "$2000-$10000",
+    "description": "Exploit path traversal in file download/view endpoints to read application source code, config files, or /etc/passwd.",
+    "steps": ["Find file download endpoint with filename parameter", "Try ../../../etc/passwd", "If filtered, try double encoding: ..%252f..%252f", "Read source code for further vulnerabilities"],
+    "detection": ["User input in file path operations", "No path canonicalization before file access", "Insufficient traversal filtering"],
+    "platforms_found": ["Apache (CVE-2021-41773)", "Spring Boot", "Express.js static file serving"]
+  },
+  {
+    "id": "BB-014",
+    "name": "Subdomain Takeover",
+    "category": "info_disclosure",
+    "severity": "high",
+    "bounty_range": "$1000-$5000",
+    "description": "Claim abandoned cloud resources (S3, Heroku, GitHub Pages) pointed to by target's DNS CNAME records.",
+    "steps": ["Enumerate subdomains via DNS bruteforce", "Find CNAME pointing to unclaimed resource (e.g., app-xyz.herokuapp.com)", "Register the resource name on the platform", "Serve malicious content on target's subdomain"],
+    "detection": ["Dangling DNS records pointing to external services", "CNAME to deprovisioned resources", "NoSuchBucket or similar errors on subdomains"],
+    "platforms_found": ["Microsoft", "Starbucks", "Uber"]
+  },
+  {
+    "id": "BB-015",
+    "name": "WebSocket Cross-Site Hijacking",
+    "category": "broken_auth",
+    "severity": "high",
+    "bounty_range": "$2000-$8000",
+    "description": "WebSocket endpoints that don't verify Origin header allow cross-site connections. Attacker's page can read victim's WebSocket data.",
+    "steps": ["Find WebSocket endpoint without Origin validation", "Create malicious page that connects to ws://target.com/ws", "Victim visits attacker's page while authenticated", "Attacker reads all WebSocket messages meant for victim"],
+    "detection": ["No Origin header check on WebSocket upgrade", "Authentication only via cookies (no CSRF token)", "Sensitive data transmitted via WebSocket"],
+    "platforms_found": ["Slack", "Various chat applications"]
+  }
+]
