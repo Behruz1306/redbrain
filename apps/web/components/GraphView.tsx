@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import cytoscape from "cytoscape";
+import { useEffect, useRef, useState } from "react";
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 interface GraphNode {
   id: string;
@@ -38,23 +39,6 @@ const nodeColors: Record<string, string> = {
   exploit: "#f97316",
 };
 
-const nodeShapes: Record<string, string> = {
-  CVE: "diamond",
-  Technique: "triangle",
-  OWASP: "star",
-  BugBounty: "hexagon",
-  CWE: "round-rectangle",
-  VulnClass: "ellipse",
-  WAFBypass: "vee",
-  CloudSecurity: "barrel",
-  APISecurity: "pentagon",
-  function: "ellipse",
-  endpoint: "rectangle",
-  vulnerability: "triangle",
-  cve: "diamond",
-  exploit: "star",
-};
-
 const nodeSizes: Record<string, number> = {
   VulnClass: 35,
   OWASP: 30,
@@ -69,90 +53,99 @@ const nodeSizes: Record<string, number> = {
 
 export function GraphView({ nodes, edges }: GraphViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const cyRef = useRef<cytoscape.Core | null>(null);
+  const cyRef = useRef<any>(null);
+  const [ready, setReady] = useState(false);
 
   useEffect(() => {
     if (!containerRef.current) return;
 
-    const cy = cytoscape({
-      container: containerRef.current,
-      style: [
-        {
-          selector: "node",
-          style: {
-            label: "data(label)",
-            "font-size": "7px",
-            "font-family": "JetBrains Mono, monospace",
-            color: "#e2e8f0",
-            "text-valign": "bottom",
-            "text-margin-y": 5,
-            "background-color": "data(color)",
-            "background-opacity": 0.85,
-            shape: "data(shape)" as any,
-            width: "data(size)",
-            height: "data(size)",
-            "border-width": 1,
-            "border-color": "data(color)",
-            "border-opacity": 0.4,
+    let destroyed = false;
+
+    import("cytoscape").then((mod) => {
+      if (destroyed || !containerRef.current) return;
+      const cytoscape = mod.default;
+
+      const cy = cytoscape({
+        container: containerRef.current,
+        style: [
+          {
+            selector: "node",
+            style: {
+              label: "data(label)",
+              "font-size": "7px",
+              "font-family": "monospace",
+              color: "#e2e8f0",
+              "text-valign": "bottom",
+              "text-margin-y": 5,
+              "background-color": "data(color)",
+              "background-opacity": 0.85,
+              width: "data(size)",
+              height: "data(size)",
+              "border-width": 1,
+              "border-color": "data(color)",
+              "border-opacity": 0.3,
+            },
           },
-        },
-        {
-          selector: "node:selected",
-          style: {
-            "border-width": 3,
-            "border-color": "#ffffff",
-            "font-size": "9px",
-            "z-index": 999,
+          {
+            selector: "node:selected",
+            style: {
+              "border-width": 3,
+              "border-color": "#ffffff",
+              "font-size": "9px",
+              "z-index": 999,
+            },
           },
-        },
-        {
-          selector: "edge",
-          style: {
-            width: 0.8,
-            "line-color": "#334155",
-            "line-opacity": 0.6,
-            "target-arrow-color": "#475569",
-            "target-arrow-shape": "triangle",
-            "arrow-scale": 0.6,
-            "curve-style": "bezier",
+          {
+            selector: "edge",
+            style: {
+              width: 0.7,
+              "line-color": "#334155",
+              "line-opacity": 0.5,
+              "target-arrow-color": "#475569",
+              "target-arrow-shape": "triangle",
+              "arrow-scale": 0.5,
+              "curve-style": "bezier",
+            },
           },
-        },
-        {
-          selector: "edge:selected",
-          style: {
-            width: 2,
-            "line-color": "#60a5fa",
-            "target-arrow-color": "#60a5fa",
-            label: "data(label)",
-            "font-size": "6px",
-            color: "#93c5fd",
+          {
+            selector: "edge:selected",
+            style: {
+              width: 2,
+              "line-color": "#60a5fa",
+              "target-arrow-color": "#60a5fa",
+              label: "data(label)",
+              "font-size": "6px",
+              color: "#93c5fd",
+            },
           },
-        },
-      ],
-      layout: {
-        name: "cose",
-        animate: true,
-        animationDuration: 800,
-        nodeRepulsion: () => 8000,
-        idealEdgeLength: () => 80,
-        gravity: 0.3,
-        numIter: 300,
-      },
-      userZoomingEnabled: true,
-      userPanningEnabled: true,
-      minZoom: 0.2,
-      maxZoom: 4,
+        ] as any,
+        layout: { name: "preset" },
+        userZoomingEnabled: true,
+        userPanningEnabled: true,
+        minZoom: 0.1,
+        maxZoom: 4,
+      });
+
+      cyRef.current = cy;
+      setReady(true);
     });
 
-    cyRef.current = cy;
-    return () => cy.destroy();
+    return () => {
+      destroyed = true;
+      if (cyRef.current) {
+        cyRef.current.destroy();
+        cyRef.current = null;
+      }
+    };
   }, []);
 
   useEffect(() => {
     const cy = cyRef.current;
-    if (!cy) return;
+    if (!cy || !ready) return;
 
     cy.elements().remove();
+
+    const nodeIds = new Set(nodes.map((n) => n.id));
 
     for (const node of nodes) {
       cy.add({
@@ -161,39 +154,40 @@ export function GraphView({ nodes, edges }: GraphViewProps) {
           id: node.id,
           label: node.label.length > 22 ? node.label.slice(0, 20) + ".." : node.label,
           color: nodeColors[node.type] || "#64748b",
-          shape: nodeShapes[node.type] || "ellipse",
           size: nodeSizes[node.type] || 18,
         },
       });
     }
 
     for (const edge of edges) {
-      const edgeId = `${edge.source}-${edge.target}-${edge.type || "link"}`;
-      if (cy.getElementById(edge.source).length && cy.getElementById(edge.target).length) {
-        cy.add({
-          group: "edges",
-          data: {
-            id: edgeId,
-            source: edge.source,
-            target: edge.target,
-            label: edge.type || edge.label || "",
-          },
-        });
-      }
+      if (!nodeIds.has(edge.source) || !nodeIds.has(edge.target)) continue;
+      if (edge.source === edge.target) continue;
+      const edgeId = `${edge.source}->${edge.target}-${edge.type || "link"}`;
+      cy.add({
+        group: "edges",
+        data: {
+          id: edgeId,
+          source: edge.source,
+          target: edge.target,
+          label: edge.type || edge.label || "",
+        },
+      });
     }
 
     if (nodes.length > 0) {
       cy.layout({
         name: "cose",
-        animate: true,
-        animationDuration: 1200,
-        nodeRepulsion: () => 6000,
-        idealEdgeLength: () => 70,
-        gravity: 0.25,
-        numIter: 500,
-      }).run();
+        animate: false,
+        nodeRepulsion: () => 5000,
+        idealEdgeLength: () => 60,
+        gravity: 0.3,
+        numIter: 200,
+        nodeDimensionsIncludeLabels: true,
+      } as any).run();
+
+      cy.fit(undefined, 30);
     }
-  }, [nodes, edges]);
+  }, [nodes, edges, ready]);
 
   const legendItems = [
     { type: "VulnClass", label: "Vuln Class", color: "#22c55e" },
@@ -209,7 +203,7 @@ export function GraphView({ nodes, edges }: GraphViewProps) {
 
   return (
     <div className="h-full w-full bg-[#0a0a0f] border border-[var(--color-border)] rounded-lg overflow-hidden relative">
-      <div className="absolute top-3 left-4 z-10 space-y-2">
+      <div className="absolute top-3 left-4 z-10 space-y-1">
         <div className="text-[10px] font-bold text-[var(--color-text-dim)] uppercase tracking-wider">
           Knowledge Graph
         </div>
@@ -227,6 +221,11 @@ export function GraphView({ nodes, edges }: GraphViewProps) {
             </span>
           ))}
       </div>
+      {!ready && (
+        <div className="absolute inset-0 flex items-center justify-center">
+          <div className="text-xs text-[var(--color-text-dim)] animate-pulse">Loading graph...</div>
+        </div>
+      )}
       <div ref={containerRef} className="w-full h-full" />
     </div>
   );

@@ -87,14 +87,10 @@ export default function BrainPage() {
     : nodes;
 
   const filteredEdges = search
-    ? edges.filter((e) => {
-        const srcNode = nodes.find((n) => n.id === e.source);
-        const tgtNode = nodes.find((n) => n.id === e.target);
-        return (
-          filteredNodes.some((n) => n.id === e.source) ||
-          filteredNodes.some((n) => n.id === e.target)
-        );
-      })
+    ? edges.filter((e) =>
+        filteredNodes.some((n) => n.id === e.source) ||
+        filteredNodes.some((n) => n.id === e.target)
+      )
     : edges;
 
   return (
