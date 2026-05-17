@@ -311,13 +311,121 @@ async def create_cross_links() -> int:
     return link_count
 
 
+async def seed_waf_bypasses() -> int:
+    waf_path = SEED_DIR / "waf_bypasses.json"
+    if not waf_path.exists():
+        return 0
+
+    bypasses = json.loads(waf_path.read_text())
+    logger.info(f"Seeding {len(bypasses)} WAF bypass techniques...")
+
+    for bypass in bypasses:
+        content = (
+            f"WAF Bypass: {bypass['name']}\n"
+            f"Category: {bypass['category']}\n"
+            f"Target WAFs: {', '.join(bypass['target_wafs'])}\n\n"
+            f"{bypass['description']}\n\n"
+            f"Payloads:\n" + "\n".join(f"  - {p}" for p in bypass["payloads"]) + "\n\n"
+            f"Evasion: {bypass['detection_evasion']}\n"
+            f"Mitigation: {bypass['mitigation']}"
+        )
+
+        page_id = await gbrain.create_page(
+            title=bypass["name"],
+            content=content,
+            page_type="WAFBypass",
+            metadata={
+                "category": bypass["category"],
+                "target_wafs": bypass["target_wafs"],
+            },
+        )
+
+        embedding = await zeroentropy.embed(content, input_type="document")
+        zeroentropy.store_embedding(f"waf:{bypass['id']}", embedding)
+
+    return len(bypasses)
+
+
+async def seed_cloud_security() -> int:
+    cloud_path = SEED_DIR / "cloud_security.json"
+    if not cloud_path.exists():
+        return 0
+
+    patterns = json.loads(cloud_path.read_text())
+    logger.info(f"Seeding {len(patterns)} cloud security patterns...")
+
+    for pattern in patterns:
+        content = (
+            f"Cloud Security: {pattern['name']}\n"
+            f"Provider: {pattern['provider']} | Category: {pattern['category']}\n"
+            f"Severity: {pattern['severity']}\n\n"
+            f"{pattern['description']}\n\n"
+            f"Attack Vector: {pattern['attack_vector']}\n\n"
+            f"Detection Indicators:\n" + "\n".join(f"  - {d}" for d in pattern["detection_indicators"]) + "\n\n"
+            f"Remediation: {pattern['remediation']}"
+        )
+
+        page_id = await gbrain.create_page(
+            title=pattern["name"],
+            content=content,
+            page_type="CloudSecurity",
+            metadata={
+                "provider": pattern["provider"],
+                "category": pattern["category"],
+                "severity": pattern["severity"],
+            },
+        )
+
+        embedding = await zeroentropy.embed(content, input_type="document")
+        zeroentropy.store_embedding(f"cloud:{pattern['id']}", embedding)
+
+    return len(patterns)
+
+
+async def seed_api_security() -> int:
+    api_path = SEED_DIR / "api_security.json"
+    if not api_path.exists():
+        return 0
+
+    patterns = json.loads(api_path.read_text())
+    logger.info(f"Seeding {len(patterns)} API security patterns...")
+
+    for pattern in patterns:
+        content = (
+            f"API Security: {pattern['name']}\n"
+            f"OWASP API: {pattern['owasp_api_top10']}\n"
+            f"Category: {pattern['category']} | Severity: {pattern['severity']}\n\n"
+            f"{pattern['description']}\n\n"
+            f"Attack Steps:\n" + "\n".join(f"  {i+1}. {s}" for i, s in enumerate(pattern["attack_steps"])) + "\n\n"
+            f"Detection Patterns:\n" + "\n".join(f"  - {d}" for d in pattern["detection_patterns"]) + "\n\n"
+            f"Vulnerable Code:\n{pattern['example_vulnerable_code']}\n\n"
+            f"Remediation: {pattern['remediation']}"
+        )
+
+        page_id = await gbrain.create_page(
+            title=pattern["name"],
+            content=content,
+            page_type="APISecurity",
+            metadata={
+                "owasp_api": pattern["owasp_api_top10"],
+                "category": pattern["category"],
+                "severity": pattern["severity"],
+            },
+        )
+
+        embedding = await zeroentropy.embed(content, input_type="document")
+        zeroentropy.store_embedding(f"api:{pattern['id']}", embedding)
+
+    return len(patterns)
+
+
 async def ensure_seeded() -> None:
     """Seed knowledge base if not already done. Safe to call multiple times."""
     global _seeded
     if _seeded:
         return
 
-    logger.info("=== RedBrain Brain Seeder v2 — Building Knowledge Graph ===")
+    logger.info("=== RedBrain Brain Seeder v3 — Building Knowledge Graph ===")
 
     # Create hub nodes first
     class_count = await seed_vuln_classes()
@@ -330,13 +438,19 @@ async def ensure_seeded() -> None:
     owasp_count = await seed_owasp()
     bb_count = await seed_bugbounty()
 
+    # Seed extended knowledge bases
+    waf_count = await seed_waf_bypasses()
+    cloud_count = await seed_cloud_security()
+    api_count = await seed_api_security()
+
     # Wire cross-links
     link_count = await create_cross_links()
 
     _seeded = True
     logger.info(
         f"Brain seeded: {cve_count} CVEs, {tech_count} techniques, "
-        f"{owasp_count} OWASP, {bb_count} bug bounty patterns | "
+        f"{owasp_count} OWASP, {bb_count} bug bounty, "
+        f"{waf_count} WAF bypasses, {cloud_count} cloud, {api_count} API | "
         f"{gbrain.page_count} pages, {gbrain.link_count} links, "
         f"{zeroentropy.corpus_size} embeddings"
     )

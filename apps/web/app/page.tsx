@@ -58,8 +58,8 @@ export default function Home() {
             <span className="cursor-blink ml-1"></span>
           </h1>
           <p className="text-[var(--color-text-dim)] text-sm max-w-md mx-auto">
-            Autonomous AI security engineer. 16 vulnerability detectors, 71 CVEs,
-            44 attack techniques. Powered by ZeroEntropy + Gemini + GBrain.
+            Autonomous AI security engineer. 16 detectors, 71 CVEs, 44 techniques,
+            15 bug bounty patterns, OWASP Top 10. Self-compounding knowledge graph.
           </p>
           <div className="flex items-center justify-center gap-2 text-[9px] text-[var(--color-text-dim)] flex-wrap">
             <span className="px-2 py-0.5 rounded border border-purple-800/50 text-purple-400">GStack</span>
@@ -233,22 +233,24 @@ export default function Home() {
         </div>
 
         {/* Live Stats */}
-        <div className="flex justify-center gap-8 text-xs text-[var(--color-text-dim)]">
+        <div className="flex justify-center gap-6 text-xs text-[var(--color-text-dim)] flex-wrap">
           <span>
-            CVEs loaded:{" "}
-            <span className="text-[var(--color-text)]">71</span>
+            CVEs: <span className="text-[var(--color-text)]">71</span>
           </span>
           <span>
-            Techniques:{" "}
-            <span className="text-[var(--color-text)]">44</span>
+            Techniques: <span className="text-[var(--color-text)]">44</span>
           </span>
           <span>
-            Detectors:{" "}
-            <span className="text-[var(--color-text)]">16</span>
+            Bug Bounty: <span className="text-[var(--color-text)]">15</span>
           </span>
           <span>
-            Scans:{" "}
-            <span className="text-[var(--color-text)]">{stats?.total_scans ?? "..."}</span>
+            OWASP: <span className="text-[var(--color-text)]">10</span>
+          </span>
+          <span>
+            Detectors: <span className="text-[var(--color-text)]">16</span>
+          </span>
+          <span>
+            Graph: <span className="text-[var(--color-text)]">{stats?.gbrain_pages ?? "..."} nodes</span>
           </span>
         </div>
 

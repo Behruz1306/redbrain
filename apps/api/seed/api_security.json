@@ -1,0 +1,303 @@
+[
+  {
+    "id": "API-001",
+    "name": "Broken Object Level Authorization (BOLA/IDOR)",
+    "category": "bola",
+    "owasp_api_top10": "API1:2023",
+    "severity": "critical",
+    "description": "The API endpoint accepts an object identifier and does not verify that the authenticated user has permission to access the target object. Attackers enumerate IDs in path parameters or request bodies to access other users' resources such as orders, profiles, documents, or financial records.",
+    "attack_steps": [
+      "Authenticate as a low-privilege user and capture a legitimate request containing an object ID",
+      "Modify the object ID in the URL path or request body (e.g., /api/v1/users/1001 -> /api/v1/users/1002)",
+      "Observe the response for data belonging to a different user",
+      "Automate ID enumeration using sequential or UUID brute-force techniques"
+    ],
+    "detection_patterns": [
+      "app\\.get\\(['\"]/?[^'\"]*/:id['\"]",
+      "params\\.(id|userId|orderId|accountId)",
+      "findById\\(req\\.(params|query|body)\\.",
+      "SELECT .* WHERE id\\s*=\\s*\\$\\{?req\\.",
+      "ObjectId\\(req\\.(params|body)\\."
+    ],
+    "example_vulnerable_code": "app.get('/api/orders/:orderId', authenticate, async (req, res) => {\n  // Missing: authorization check that req.user.id owns this order\n  const order = await Order.findById(req.params.orderId);\n  if (!order) return res.status(404).json({ error: 'Not found' });\n  res.json(order);\n});",
+    "remediation": "Implement object-level authorization checks on every data access. Verify that the authenticated user owns or has explicit permission to access the requested resource. Use the user's session context (e.g., Order.findOne({ _id: orderId, userId: req.user.id })) rather than trusting client-supplied IDs alone. Consider using non-sequential UUIDs to reduce enumeration risk as a defense-in-depth measure."
+  },
+  {
+    "id": "API-002",
+    "name": "Broken Authentication - Weak Token Generation and Missing Rate Limits",
+    "category": "auth",
+    "owasp_api_top10": "API2:2023",
+    "severity": "critical",
+    "description": "The API authentication mechanism uses predictable tokens, lacks brute-force protection on login endpoints, accepts weak passwords without enforcement, or fails to validate token integrity. This allows credential stuffing, token prediction, and session hijacking attacks.",
+    "attack_steps": [
+      "Identify the login endpoint and observe the token generation mechanism",
+      "Attempt credential stuffing with leaked password databases against /api/auth/login",
+      "Observe lack of rate limiting or account lockout after repeated failures",
+      "Analyze JWT tokens for weak signing algorithms or missing expiration",
+      "Attempt password reset flow abuse via predictable OTP or token"
+    ],
+    "detection_patterns": [
+      "Math\\.random\\(\\).*token",
+      "crypto\\.createHash\\(['\"]md5['\"]\\)",
+      "Date\\.now\\(\\)\\.toString\\(36\\)",
+      "password.*minlength.*[1-5][^0-9]",
+      "app\\.(post|put)\\(['\"].*(/login|/auth|/signin)['\"](?!.*rateLimit)",
+      "new Date\\(\\).*\\.getTime\\(\\).*token"
+    ],
+    "example_vulnerable_code": "app.post('/api/auth/login', async (req, res) => {\n  // No rate limiting applied to this endpoint\n  const { email, password } = req.body;\n  const user = await User.findOne({ email });\n  if (!user || !await bcrypt.compare(password, user.password)) {\n    return res.status(401).json({ error: 'Invalid credentials' });\n  }\n  // Weak token: predictable, based on timestamp\n  const token = Buffer.from(`${user.id}:${Date.now()}`).toString('base64');\n  res.json({ token });\n});",
+    "remediation": "Use cryptographically secure token generation (crypto.randomBytes or well-configured JWT with RS256/ES256). Apply strict rate limiting on authentication endpoints (e.g., 5 attempts per minute per IP/account). Implement account lockout or exponential backoff. Enforce strong password policies. Use short-lived access tokens with secure refresh token rotation. Add multi-factor authentication for sensitive operations."
+  },
+  {
+    "id": "API-003",
+    "name": "Broken Object Property Level Authorization (Mass Assignment)",
+    "category": "mass_assignment",
+    "owasp_api_top10": "API3:2023",
+    "severity": "high",
+    "description": "The API accepts full object payloads from the client and directly applies them to internal data models without filtering properties. Attackers inject extra fields (like role, isAdmin, balance, verified) that should not be client-controllable, leading to privilege escalation or data corruption.",
+    "attack_steps": [
+      "Observe the API response schema to identify internal properties (role, isAdmin, credit, verified)",
+      "Submit a PUT/PATCH request with additional properties not shown in the UI form",
+      "Include privilege-escalating fields: {\"name\": \"attacker\", \"role\": \"admin\", \"isVerified\": true}",
+      "Verify the injected properties persisted by re-fetching the resource"
+    ],
+    "detection_patterns": [
+      "Object\\.assign\\(.*req\\.body\\)",
+      "\\.update\\(.*req\\.body\\)",
+      "\\{\\s*\\.\\.\\.req\\.body\\s*\\}",
+      "Model\\.(findByIdAndUpdate|updateOne|updateMany)\\([^,]+,\\s*req\\.body",
+      "user\\.set\\(req\\.body\\)",
+      "Object\\.keys\\(req\\.body\\)\\.forEach"
+    ],
+    "example_vulnerable_code": "app.put('/api/users/:id', authenticate, async (req, res) => {\n  // Directly spreading user input into the update - allows mass assignment\n  const updated = await User.findByIdAndUpdate(\n    req.params.id,\n    { ...req.body },  // Attacker sends: {\"name\": \"hacker\", \"role\": \"admin\", \"balance\": 99999}\n    { new: true }\n  );\n  res.json(updated);\n});",
+    "remediation": "Explicitly whitelist allowed fields for each operation. Use DTOs (Data Transfer Objects) or schema validation (Joi, Zod, class-validator) to define exactly which properties clients can modify. Never spread req.body directly into database operations. Separate the schemas for creation, update, and admin operations. Example: const { name, email, avatar } = req.body; await User.findByIdAndUpdate(id, { name, email, avatar });"
+  },
+  {
+    "id": "API-004",
+    "name": "Unrestricted Resource Consumption",
+    "category": "rate_limit",
+    "owasp_api_top10": "API4:2023",
+    "severity": "high",
+    "description": "The API does not enforce limits on resource consumption including request rates, payload sizes, pagination bounds, or computational cost. Attackers exploit this to cause denial of service, excessive cloud billing, or data exfiltration via unbounded queries.",
+    "attack_steps": [
+      "Identify endpoints that return collections without pagination limits",
+      "Send requests with limit=999999 or remove pagination parameters entirely",
+      "Submit extremely large payloads to body-parsing endpoints",
+      "Trigger expensive operations (sorting, filtering, joins) on large datasets",
+      "Perform parallel requests to overwhelm the server resources"
+    ],
+    "detection_patterns": [
+      "\\.find\\(\\)(?!.*\\.limit\\()",
+      "req\\.query\\.limit.*parseInt(?!.*Math\\.min)",
+      "limit:\\s*req\\.(query|body)\\.limit",
+      "bodyParser\\.json\\(\\)(?!.*limit)",
+      "express\\.json\\(\\{\\s*\\}\\)",
+      "app\\.use\\([^)]*(?!rateLimit)"
+    ],
+    "example_vulnerable_code": "app.get('/api/transactions', authenticate, async (req, res) => {\n  // No upper bound on limit, no default pagination\n  const limit = parseInt(req.query.limit) || 1000000;\n  const transactions = await Transaction.find({ userId: req.user.id })\n    .sort({ date: -1 })\n    .limit(limit);  // Attacker sets limit=10000000, OOM or massive response\n  res.json(transactions);\n});\n\n// Server setup with no body size limit\napp.use(express.json()); // Default 100kb but no explicit limit set",
+    "remediation": "Enforce maximum pagination limits server-side (e.g., Math.min(requestedLimit, 100)). Set explicit body size limits: express.json({ limit: '1mb' }). Implement rate limiting per user/IP using sliding window counters. Add request timeout middleware. Set query complexity limits for database operations. Use cursor-based pagination for large datasets. Monitor and alert on abnormal resource consumption patterns."
+  },
+  {
+    "id": "API-005",
+    "name": "Broken Function Level Authorization (BFLA)",
+    "category": "bfla",
+    "owasp_api_top10": "API5:2023",
+    "severity": "critical",
+    "description": "The API does not verify that the authenticated user has the required role or privilege level to access administrative or sensitive function-level endpoints. Attackers discover admin routes through predictable URL patterns, client-side code, or API documentation and invoke them directly.",
+    "attack_steps": [
+      "Authenticate as a regular user and enumerate API endpoints from JavaScript bundles or docs",
+      "Identify admin-specific endpoints: /api/admin/users, /api/internal/config, /api/v1/users/delete-all",
+      "Send requests to admin endpoints using a regular user's authentication token",
+      "Attempt HTTP method switching (GET to DELETE/PUT) on standard endpoints",
+      "Try path traversal to reach admin controllers: /api/v1/../admin/settings"
+    ],
+    "detection_patterns": [
+      "app\\.(get|post|put|delete)\\(['\"].*admin.*['\"](?!.*(?:isAdmin|authorize|requireRole|checkPermission))",
+      "router\\.(get|post)\\(['\"].*internal",
+      "if\\s*\\(req\\.user\\)(?!.*\\.role)",
+      "app\\.delete\\(['\"][^'\"]+['\"],\\s*authenticate\\s*,",
+      "\\/api\\/(admin|internal|management|backoffice)\\/"
+    ],
+    "example_vulnerable_code": "// Only checks authentication, NOT authorization level\napp.delete('/api/admin/users/:id', authenticate, async (req, res) => {\n  // Missing: role check like requireRole('admin')\n  await User.findByIdAndDelete(req.params.id);\n  res.json({ message: 'User deleted' });\n});\n\napp.get('/api/admin/analytics', authenticate, async (req, res) => {\n  // Any authenticated user can access admin analytics\n  const stats = await Analytics.getAll();\n  res.json(stats);\n});",
+    "remediation": "Implement role-based access control (RBAC) middleware that checks user roles/permissions before executing function logic. Deny by default - require explicit role grants. Separate admin and user route modules with distinct middleware chains. Example: app.delete('/api/admin/users/:id', authenticate, requireRole('admin'), handler). Audit all endpoints to ensure proper authorization middleware is applied. Use centralized authorization policy (e.g., CASL, casbin) rather than ad-hoc checks."
+  },
+  {
+    "id": "API-006",
+    "name": "Unrestricted Access to Sensitive Business Flows",
+    "category": "rate_limit",
+    "owasp_api_top10": "API6:2023",
+    "severity": "high",
+    "description": "The API exposes sensitive business flows (purchasing, reservations, posting, voting, referrals) without mechanisms to detect and prevent automated abuse. Attackers script bulk operations to scalp inventory, manipulate voting, abuse referral systems, or spam content at scale.",
+    "attack_steps": [
+      "Identify high-value business flow endpoints (checkout, coupon redemption, account signup with bonus)",
+      "Script automated requests to abuse the flow faster than legitimate users",
+      "Bypass client-side protections (CAPTCHA only checked in frontend, no server validation)",
+      "Use multiple accounts or IPs to distribute the automated abuse",
+      "Exploit race conditions in inventory/balance checks during concurrent requests"
+    ],
+    "detection_patterns": [
+      "app\\.post\\(['\"].*(/purchase|/checkout|/redeem|/vote|/referral|/signup-bonus)",
+      "(?!.*captcha)(?!.*fingerprint)(?!.*deviceId)app\\.(post|put)\\(['\"].*(/book|/reserve)",
+      "coupon.*apply(?!.*usageCount)",
+      "referralBonus(?!.*uniqueDevice)",
+      "\\.create\\(.*\\)(?!.*rateLimit).*bonus"
+    ],
+    "example_vulnerable_code": "app.post('/api/coupons/redeem', authenticate, async (req, res) => {\n  const { code } = req.body;\n  const coupon = await Coupon.findOne({ code, active: true });\n  if (!coupon) return res.status(404).json({ error: 'Invalid coupon' });\n  \n  // No check for: already used by this user, usage frequency, device fingerprint\n  // Race condition: multiple concurrent requests can all pass this check\n  await User.updateOne(\n    { _id: req.user.id },\n    { $inc: { balance: coupon.value } }\n  );\n  res.json({ success: true, credited: coupon.value });\n});\n\n// No CAPTCHA, no device fingerprinting, no velocity check",
+    "remediation": "Implement anti-automation defenses: server-side CAPTCHA verification, device fingerprinting, behavioral analysis, and velocity checks. Use atomic operations with constraints to prevent race conditions (e.g., findOneAndUpdate with conditions). Track per-user and per-device usage of sensitive flows. Apply progressive friction for suspicious patterns. Implement inventory reservation with TTL. Use idempotency keys for financial operations."
+  },
+  {
+    "id": "API-007",
+    "name": "Server-Side Request Forgery (SSRF) via Webhooks and Callbacks",
+    "category": "ssrf",
+    "owasp_api_top10": "API7:2023",
+    "severity": "critical",
+    "description": "The API accepts URLs from user input for webhook callbacks, import features, image fetching, or URL previews and makes server-side requests to those URLs without proper validation. Attackers supply internal network addresses or cloud metadata endpoints to access internal services, steal credentials, or pivot within the infrastructure.",
+    "attack_steps": [
+      "Identify API endpoints that accept URLs: webhook registration, avatar URL, import from URL, link preview",
+      "Submit internal addresses: http://169.254.169.254/latest/meta-data/iam/security-credentials/",
+      "Try cloud metadata endpoints for AWS, GCP, Azure to steal IAM credentials",
+      "Access internal services: http://localhost:6379 (Redis), http://internal-admin:8080",
+      "Use DNS rebinding or redirect chains to bypass naive URL validation",
+      "Exfiltrate responses via the webhook callback or error messages"
+    ],
+    "detection_patterns": [
+      "(axios|fetch|got|request|http\\.get|urllib|requests\\.get)\\(.*req\\.(body|query|params)\\.",
+      "webhookUrl.*=.*req\\.",
+      "callbackUrl.*=.*req\\.",
+      "new URL\\(req\\.(body|query)\\.",
+      "\\.(get|post|request)\\(\\s*(url|endpoint|callbackUrl|webhookUrl|imageUrl)",
+      "fetch\\(.*userProvided"
+    ],
+    "example_vulnerable_code": "app.post('/api/webhooks/register', authenticate, async (req, res) => {\n  const { url, events } = req.body;\n  // No URL validation - accepts any URL including internal addresses\n  // Attacker sets url to http://169.254.169.254/latest/meta-data/\n  await Webhook.create({ userId: req.user.id, url, events });\n  \n  // Verification ping - makes server-side request to attacker-controlled URL\n  const verification = await axios.get(url + '/verify?token=' + crypto.randomUUID());\n  res.json({ registered: true });\n});\n\napp.post('/api/import/url', authenticate, async (req, res) => {\n  // SSRF: fetches any URL the user provides\n  const response = await fetch(req.body.importUrl);\n  const data = await response.json();\n  res.json({ imported: data });\n});",
+    "remediation": "Validate and sanitize all user-supplied URLs. Implement an allowlist of permitted domains/protocols (https only). Block private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 127.0.0.0/8) and cloud metadata IPs. Resolve DNS before making requests and validate the resolved IP. Use a dedicated egress proxy for outbound requests. Disable HTTP redirects or revalidate after each redirect. Run webhook workers in network-isolated environments without access to internal services."
+  },
+  {
+    "id": "API-008",
+    "name": "Security Misconfiguration - Verbose Errors, Open CORS, Debug Mode",
+    "category": "data_exposure",
+    "owasp_api_top10": "API8:2023",
+    "severity": "medium",
+    "description": "The API is deployed with insecure default configurations including overly permissive CORS policies, verbose error messages exposing stack traces and internal paths, enabled debug/development modes in production, missing security headers, or exposed admin interfaces without additional protection.",
+    "attack_steps": [
+      "Trigger application errors to observe stack traces revealing framework versions and file paths",
+      "Check CORS headers: send requests from arbitrary origins to test Access-Control-Allow-Origin: *",
+      "Probe for debug endpoints: /debug, /actuator, /graphql (with introspection), /__debug__",
+      "Check response headers for missing X-Content-Type-Options, Strict-Transport-Security",
+      "Identify exposed configuration via /env, /config, /.env, /api/swagger"
+    ],
+    "detection_patterns": [
+      "cors\\(\\{\\s*origin:\\s*['\"]\\*['\"]",
+      "cors\\(\\)(?!\\s*//)",
+      "Access-Control-Allow-Origin.*\\*",
+      "res\\.(json|send)\\(.*err\\.(stack|message)",
+      "debug:\\s*true",
+      "NODE_ENV.*(!==|!=).*production(?!.*throw)",
+      "app\\.use\\(errorHandler\\)(?!.*production)",
+      "stack.*trace.*res\\."
+    ],
+    "example_vulnerable_code": "const app = express();\n\n// Permissive CORS - allows any origin to make authenticated requests\napp.use(cors({ origin: '*', credentials: true }));\n\n// Debug mode exposed in production\napp.get('/api/debug/config', (req, res) => {\n  res.json({ dbUrl: process.env.DATABASE_URL, apiKeys: process.env });\n});\n\n// Verbose error handler exposing internals\napp.use((err, req, res, next) => {\n  res.status(500).json({\n    error: err.message,\n    stack: err.stack,  // Exposes internal file paths and line numbers\n    query: err.sql     // Exposes database queries\n  });\n});",
+    "remediation": "Configure CORS with explicit allowed origins (never use * with credentials). Implement production error handlers that return generic messages without stack traces or internal details. Remove or gate debug/diagnostic endpoints behind VPN or internal-only network access. Set all security headers (Helmet.js for Express). Disable GraphQL introspection in production. Ensure NODE_ENV=production in deployment. Audit and remove /env, /debug, /actuator, swagger UI in production builds."
+  },
+  {
+    "id": "API-009",
+    "name": "Improper Inventory Management - Shadow and Undocumented APIs",
+    "category": "data_exposure",
+    "owasp_api_top10": "API9:2023",
+    "severity": "medium",
+    "description": "The organization runs outdated, unpatched, or undocumented API versions that lack current security controls. Shadow APIs created during development, deprecated endpoints left active, or internal-only APIs exposed to the internet create attack surface that bypasses modern security measures.",
+    "attack_steps": [
+      "Enumerate API versions by modifying URL paths: /api/v1/ -> /api/v2/, /api/v3/, /api/beta/",
+      "Discover old endpoints from JavaScript source maps, mobile app binaries, or cached docs",
+      "Probe common development paths: /api/internal/, /api/test/, /api/staging/",
+      "Check for swagger/OpenAPI documentation exposure revealing all endpoints",
+      "Compare documented endpoints against actual route registrations",
+      "Test deprecated endpoints that may lack newer security middleware"
+    ],
+    "detection_patterns": [
+      "router.*(/v[0-9]+|/beta|/alpha|/internal|/legacy|/old|/deprecated)",
+      "@deprecated(?!.*removed)",
+      "TODO.*remove.*endpoint",
+      "// (old|legacy|deprecated|temp).*route",
+      "app\\.use\\(['\"]/(api-docs|swagger|openapi)",
+      "/api/(test|staging|dev|internal)/"
+    ],
+    "example_vulnerable_code": "// Current secured version\napp.use('/api/v2/users', authenticate, authorize, rateLimiter, usersRouterV2);\n\n// Deprecated version still active - missing new security middleware!\n// TODO: remove after migration complete (added 2022-01-15)\napp.use('/api/v1/users', authenticate, usersRouterV1); // No authorize, no rate limit\n\n// Internal API accidentally exposed - no auth at all\napp.use('/api/internal/metrics', metricsRouter);\n\n// Swagger docs exposed in production\napp.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));",
+    "remediation": "Maintain a complete inventory of all API endpoints and versions. Implement an API gateway that enforces version lifecycle policies. Remove or properly gate deprecated API versions behind feature flags with sunset dates. Restrict Swagger/OpenAPI documentation to development environments or authenticated internal users. Conduct regular API discovery audits using traffic analysis and code scanning. Apply consistent security middleware across all API versions via a shared middleware stack."
+  },
+  {
+    "id": "API-010",
+    "name": "Unsafe API Consumption - Trusting Third-Party Responses",
+    "category": "injection",
+    "owasp_api_top10": "API10:2023",
+    "severity": "high",
+    "description": "The API integrates with third-party services and trusts their responses without validation or sanitization. When a third-party API is compromised or returns malicious data, the trusting API passes this data directly to its own users or database, enabling injection attacks, data corruption, or cross-site scripting through stored payloads.",
+    "attack_steps": [
+      "Identify third-party API integrations (payment processors, geocoding, social logins, enrichment APIs)",
+      "Compromise or intercept the third-party response (supply chain attack, MITM, DNS hijack)",
+      "Inject malicious payloads in the third-party response fields (XSS in name, SQLi in address)",
+      "Observe the target API storing or reflecting the malicious data without sanitization",
+      "Trigger the stored payload when other users access the contaminated data"
+    ],
+    "detection_patterns": [
+      "await (axios|fetch|got|request).*\\.data(?!.*sanitize|validate|escape)",
+      "thirdPartyResponse\\..*(save|insert|update|create)",
+      "externalApi.*\\.then.*res\\.json",
+      "\\.json\\(\\).*\\.then.*db\\.(save|insert|update)",
+      "partner(Api|Service|Response)(?!.*validate)",
+      "webhook.*body.*save\\("
+    ],
+    "example_vulnerable_code": "app.get('/api/users/:id/enriched-profile', authenticate, async (req, res) => {\n  const user = await User.findById(req.params.id);\n  \n  // Fetching from third-party enrichment API - response is UNTRUSTED\n  const enrichment = await axios.get(`https://api.enrichment.io/person/${user.email}`);\n  \n  // Directly storing third-party data without validation or sanitization\n  // If enrichment API is compromised, attacker injects: {company: \"<script>steal()</script>\"}\n  await User.updateOne({ _id: user._id }, {\n    company: enrichment.data.company,\n    title: enrichment.data.title,\n    bio: enrichment.data.bio  // Stored XSS vector\n  });\n  \n  res.json({ ...user.toObject(), ...enrichment.data });\n});",
+    "remediation": "Treat all third-party API responses as untrusted input. Validate response schemas against expected types and formats using libraries like Joi or Zod. Sanitize string fields before storing or displaying (DOMPurify for HTML contexts, parameterized queries for SQL). Implement response integrity checks (HMAC signatures where available). Set timeouts and circuit breakers for external calls. Use allowlists for expected field values where possible. Log and alert on unexpected response formats."
+  },
+  {
+    "id": "API-011",
+    "name": "GraphQL Introspection Leak and Nested Query Denial of Service",
+    "category": "data_exposure",
+    "owasp_api_top10": "API4:2023",
+    "severity": "high",
+    "description": "The GraphQL API exposes introspection queries in production, allowing attackers to map the entire schema including internal types and sensitive fields. Additionally, the API lacks query depth and complexity limits, enabling deeply nested or aliased queries that consume excessive server resources and cause denial of service.",
+    "attack_steps": [
+      "Send introspection query: {__schema{types{name,fields{name,type{name}}}}} to enumerate all types and fields",
+      "Identify sensitive internal types (AdminUser, InternalConfig, PaymentInfo) from schema",
+      "Craft deeply nested queries exploiting circular relationships: {user{friends{friends{friends{...}}}}}",
+      "Use query aliases to multiply expensive resolvers: {a1:user(id:1){...} a2:user(id:2){...} ... a1000:user(id:1000){...}}",
+      "Combine batching with fragment spreading for exponential query complexity"
+    ],
+    "detection_patterns": [
+      "introspection.*true",
+      "(?<!introspection.*false.*)new ApolloServer",
+      "buildSchema\\((?!.*depthLimit)",
+      "graphqlHTTP\\(\\{(?!.*validationRules)",
+      "(?!.*depthLimit|queryComplexity).*graphql.*schema",
+      "__schema|__type.*introspection"
+    ],
+    "example_vulnerable_code": "const server = new ApolloServer({\n  typeDefs,\n  resolvers,\n  // Introspection enabled by default - exposes entire schema\n  introspection: true,  // Should be false in production\n  // No query depth limiting\n  // No query complexity analysis\n});\n\n// Vulnerable schema with circular references\nconst typeDefs = gql`\n  type User {\n    id: ID!\n    friends: [User!]!    # Circular: allows infinite nesting\n    posts: [Post!]!\n  }\n  type Post {\n    author: User!        # Circular back-reference\n    comments: [Comment!]!\n  }\n`;\n\n// Attacker query:\n// { user(id:1) { friends { friends { friends { friends { posts { author { friends { ... }}}}}}}}}\n// Exponential resolver calls causing DoS",
+    "remediation": "Disable introspection in production: introspection: process.env.NODE_ENV !== 'production'. Implement query depth limiting (graphql-depth-limit, max depth 7-10). Add query complexity analysis (graphql-query-complexity) with maximum cost thresholds. Use persisted queries / allowlisted operations in production. Set resolver-level timeouts. Implement DataLoader to batch and cache database calls. Rate limit GraphQL requests by query complexity score rather than simple request count."
+  },
+  {
+    "id": "API-012",
+    "name": "JWT Implementation Flaws - Algorithm None, Key Confusion, Missing Expiry",
+    "category": "auth",
+    "owasp_api_top10": "API2:2023",
+    "severity": "critical",
+    "description": "The API's JWT implementation contains critical flaws: accepting the 'none' algorithm (allowing unsigned tokens), vulnerable to algorithm confusion attacks (RS256 to HS256 key confusion where the public key is used as HMAC secret), missing or unchecked expiration claims, or using weak/hardcoded signing secrets. These flaws allow token forgery and authentication bypass.",
+    "attack_steps": [
+      "Decode the JWT header to identify the signing algorithm",
+      "Attempt algorithm substitution: change alg to 'none' and remove the signature",
+      "For RS256 tokens, attempt key confusion: switch to HS256 and sign with the public key as secret",
+      "Forge a token with elevated claims (role: admin) using the discovered weakness",
+      "Test tokens with expired/missing exp claim to check if expiry is validated",
+      "Brute-force weak signing secrets using tools like jwt-cracker"
+    ],
+    "detection_patterns": [
+      "jwt\\.verify\\(.*\\{\\s*algorithms?:\\s*\\[.*none",
+      "jwt\\.verify\\([^,]+,\\s*[^,]+\\)(?!.*algorithms)",
+      "jwt\\.decode\\((?!.*verify)",
+      "secretOrKey.*['\"](?:secret|password|key|123|jwt_secret)['\"]",
+      "jsonwebtoken.*(?!.*expiresIn)",
+      "jwt\\.sign\\(.*(?!.*exp|expiresIn)",
+      "algorithms:\\s*\\[.*HS256.*RS256|RS256.*HS256"
+    ],
+    "example_vulnerable_code": "const jwt = require('jsonwebtoken');\n\n// Weak hardcoded secret\nconst JWT_SECRET = 'secret123';\n\n// Token creation without expiry\napp.post('/api/auth/login', async (req, res) => {\n  const user = await authenticate(req.body);\n  // Missing expiresIn - token never expires\n  const token = jwt.sign({ userId: user.id, role: user.role }, JWT_SECRET);\n  res.json({ token });\n});\n\n// Verification without algorithm restriction\napp.use('/api', (req, res, next) => {\n  const token = req.headers.authorization?.split(' ')[1];\n  try {\n    // VULNERABLE: does not restrict algorithms\n    // Attacker can use alg:none or switch RS256->HS256\n    const decoded = jwt.verify(token, JWT_SECRET);\n    req.user = decoded;\n    next();\n  } catch (e) {\n    res.status(401).json({ error: 'Invalid token' });\n  }\n});",
+    "remediation": "Always specify allowed algorithms explicitly: jwt.verify(token, secret, { algorithms: ['RS256'] }). Use asymmetric algorithms (RS256/ES256) for production APIs. Set and validate expiration: jwt.sign(payload, key, { expiresIn: '15m' }). Use strong randomly generated secrets (256+ bits) stored in secure secret management. Implement token refresh rotation with short-lived access tokens. Add issuer (iss) and audience (aud) validation. Use a well-maintained JWT library that rejects 'none' algorithm by default. Implement token revocation for logout and security events."
+  }
+]

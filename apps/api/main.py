@@ -137,16 +137,24 @@ async def download_report(scan_id: str) -> PlainTextResponse:
 
 @app.get("/api/brain/graph")
 async def brain_graph(scan_id: str | None = None) -> dict[str, Any]:
+    from .core.gbrain_client import gbrain
+
+    graph = await gbrain.get_graph()
+
     if scan_id:
         result = scan_results.get(scan_id, {})
+        scan_nodes = result.get("graph_nodes", [])
+        scan_edges = result.get("graph_edges", [])
+        graph["nodes"].extend(scan_nodes)
+        graph["edges"].extend(scan_edges)
     elif scan_results:
         result = list(scan_results.values())[-1]
-    else:
-        result = {}
-    return {
-        "nodes": result.get("graph_nodes", []),
-        "edges": result.get("graph_edges", []),
-    }
+        scan_nodes = result.get("graph_nodes", [])
+        scan_edges = result.get("graph_edges", [])
+        graph["nodes"].extend(scan_nodes)
+        graph["edges"].extend(scan_edges)
+
+    return graph
 
 
 @app.get("/api/brain/knowledge")
@@ -162,6 +170,53 @@ async def brain_knowledge() -> dict[str, Any]:
         "gbrain_pages": gbrain.page_count,
         "gbrain_links": gbrain.link_count,
         "active_scans": len(scan_results),
+    }
+
+
+@app.get("/api/brain/compound")
+async def brain_compound() -> dict[str, Any]:
+    """Knowledge compounding metrics — shows the brain growing smarter over time."""
+    from .core.gbrain_client import gbrain
+    from .core.zeroentropy_client import zeroentropy
+
+    graph = await gbrain.get_graph()
+    nodes = graph.get("nodes", [])
+    edges = graph.get("edges", [])
+
+    type_counts: dict[str, int] = {}
+    for node in nodes:
+        t = node.get("type", "unknown")
+        type_counts[t] = type_counts.get(t, 0) + 1
+
+    edge_types: dict[str, int] = {}
+    for edge in edges:
+        t = edge.get("type", "unknown")
+        edge_types[t] = edge_types.get(t, 0) + 1
+
+    density = (2 * len(edges)) / (len(nodes) * (len(nodes) - 1)) if len(nodes) > 1 else 0
+
+    return {
+        "brain_health": {
+            "total_nodes": len(nodes),
+            "total_edges": len(edges),
+            "graph_density": round(density, 4),
+            "embeddings": zeroentropy.corpus_size,
+            "scans_processed": len(scan_results),
+        },
+        "node_types": type_counts,
+        "edge_types": edge_types,
+        "knowledge_layers": [
+            {"name": "CVE Database", "count": type_counts.get("CVE", 0), "status": "loaded"},
+            {"name": "Attack Techniques", "count": type_counts.get("Technique", 0), "status": "loaded"},
+            {"name": "OWASP Top 10", "count": type_counts.get("OWASP", 0), "status": "loaded"},
+            {"name": "Bug Bounty Patterns", "count": type_counts.get("BugBounty", 0), "status": "loaded"},
+            {"name": "CWE Weaknesses", "count": type_counts.get("CWE", 0), "status": "loaded"},
+            {"name": "Vulnerability Classes", "count": type_counts.get("VulnClass", 0), "status": "loaded"},
+            {"name": "WAF Bypasses", "count": type_counts.get("WAFBypass", 0), "status": "loaded" if type_counts.get("WAFBypass", 0) > 0 else "pending"},
+            {"name": "Cloud Security", "count": type_counts.get("CloudSecurity", 0), "status": "loaded" if type_counts.get("CloudSecurity", 0) > 0 else "pending"},
+            {"name": "API Security", "count": type_counts.get("APISecurity", 0), "status": "loaded" if type_counts.get("APISecurity", 0) > 0 else "pending"},
+        ],
+        "compounding_factor": round(1.0 + (len(scan_results) * 0.15) + (density * 10), 2),
     }
 
 
@@ -200,16 +255,42 @@ async def brain_kb() -> dict[str, Any]:
     vuln_classes = list({c["class"] for c in cves})
     technique_classes = list({t["class"] for t in techniques})
 
+    owasp_path = seed_dir / "owasp.json"
+    owasp = _json.loads(owasp_path.read_text()) if owasp_path.exists() else []
+
+    bb_path = seed_dir / "bugbounty_patterns.json"
+    bugbounty = _json.loads(bb_path.read_text()) if bb_path.exists() else []
+
+    waf_path = seed_dir / "waf_bypasses.json"
+    waf_bypasses = _json.loads(waf_path.read_text()) if waf_path.exists() else []
+
+    cloud_path = seed_dir / "cloud_security.json"
+    cloud_security = _json.loads(cloud_path.read_text()) if cloud_path.exists() else []
+
+    api_path = seed_dir / "api_security.json"
+    api_security = _json.loads(api_path.read_text()) if api_path.exists() else []
+
     return {
         "cves": cves,
         "techniques": techniques,
         "detectors": detectors,
+        "owasp": owasp,
+        "bugbounty": bugbounty,
+        "waf_bypasses": waf_bypasses,
+        "cloud_security": cloud_security,
+        "api_security": api_security,
         "stats": {
             "total_cves": len(cves),
             "total_techniques": len(techniques),
             "total_detectors": len(detectors),
+            "total_owasp": len(owasp),
+            "total_bugbounty": len(bugbounty),
+            "total_waf_bypasses": len(waf_bypasses),
+            "total_cloud_security": len(cloud_security),
+            "total_api_security": len(api_security),
             "vuln_classes": sorted(set(vuln_classes + technique_classes)),
             "total_payloads": sum(len(t["payloads"]) for t in techniques),
+            "total_knowledge_items": len(cves) + len(techniques) + len(owasp) + len(bugbounty) + len(waf_bypasses) + len(cloud_security) + len(api_security),
         },
     }
 
@@ -373,6 +454,37 @@ async def mcp_manifest() -> dict[str, Any]:
             },
         ],
         "authentication": {"type": "bearer", "description": "Use your RedBrain API key"},
+    }
+
+
+@app.get("/api/brain/threat-intel")
+async def brain_threat_intel(query: str = "latest security vulnerabilities") -> dict[str, Any]:
+    """Get real-time threat intelligence from The Hog."""
+    from .core.thehog_client import thehog
+
+    signals = await thehog.search_threat_intel(query)
+    return {
+        "query": query,
+        "signals": signals,
+        "source": "The Hog AI" if thehog.available else "Offline Intel DB",
+        "signal_count": len(signals),
+    }
+
+
+@app.get("/api/brain/threat-intel/classes")
+async def brain_threat_intel_classes() -> dict[str, Any]:
+    """Get threat intel for all vulnerability classes."""
+    from .core.thehog_client import thehog
+
+    classes = ["sqli", "xss", "idor", "broken_auth", "ssrf", "ssti", "race_condition", "prototype_pollution"]
+    results = []
+    for cls in classes:
+        intel = await thehog.get_vuln_class_intel(cls)
+        results.append(intel)
+
+    return {
+        "classes": results,
+        "source": "The Hog AI" if thehog.available else "Offline Intel DB",
     }
 
 

@@ -1,0 +1,172 @@
+[
+  {
+    "id": "CLOUD-001",
+    "name": "S3 Bucket Misconfiguration",
+    "provider": "AWS",
+    "category": "storage",
+    "severity": "critical",
+    "description": "Amazon S3 buckets configured with overly permissive ACLs or bucket policies that allow public read/write access, enabling unauthorized data exfiltration or malicious file upload.",
+    "attack_vector": "Enumerate S3 bucket names via DNS brute-forcing, Google dorking, or source code analysis. Access publicly listable buckets to download sensitive data or upload backdoored files that may be served to legitimate users.",
+    "detection_indicators": [
+      "S3 bucket policy with Principal set to '*'",
+      "ACL grants to 'AllUsers' or 'AuthenticatedUsers' groups",
+      "s3:GetObject or s3:PutObject allowed without condition keys",
+      "CloudTrail showing GetBucketAcl followed by bulk GetObject from unknown IPs",
+      "Bucket policy lacking aws:SecureTransport condition"
+    ],
+    "remediation": "Enable S3 Block Public Access at the account level. Audit all bucket policies and ACLs to remove wildcard principals. Enable CloudTrail data event logging for S3. Use bucket policies with explicit deny for non-TLS access and restrict by VPC endpoint or source IP where possible."
+  },
+  {
+    "id": "CLOUD-002",
+    "name": "IMDSv1 Instance Metadata Exploitation",
+    "provider": "AWS",
+    "category": "compute",
+    "severity": "critical",
+    "description": "EC2 Instance Metadata Service v1 (IMDSv1) allows unauthenticated HTTP GET requests to 169.254.169.254, enabling SSRF attacks to steal IAM role temporary credentials, user-data scripts containing secrets, and instance identity documents.",
+    "attack_vector": "Chain an SSRF vulnerability in a web application running on EC2 to query http://169.254.169.254/latest/meta-data/iam/security-credentials/<role-name> and exfiltrate the AccessKeyId, SecretAccessKey, and Token for lateral movement.",
+    "detection_indicators": [
+      "Outbound HTTP requests to 169.254.169.254 from application processes",
+      "CloudTrail API calls using temporary credentials from unexpected source IPs",
+      "GuardDuty finding: UnauthorizedAccess:IAMUser/InstanceCredentialExfiltration",
+      "HTTP logs showing /latest/meta-data/ path access patterns",
+      "Unusual AssumeRole or GetSessionToken calls from instance role credentials"
+    ],
+    "remediation": "Enforce IMDSv2 (HttpTokens=required) on all EC2 instances via instance metadata options. Set hop limit to 1 to prevent container escapes. Use IAM policies to restrict metadata access scope. Deploy VPC endpoint policies and monitor for credential use outside expected network ranges."
+  },
+  {
+    "id": "CLOUD-003",
+    "name": "Overprivileged IAM Roles and Policies",
+    "provider": "AWS",
+    "category": "iam",
+    "severity": "high",
+    "description": "IAM roles or users granted overly broad permissions (e.g., AdministratorAccess, iam:*, or Action: '*') that violate least-privilege principle, enabling privilege escalation and lateral movement after initial compromise.",
+    "attack_vector": "After compromising credentials with broad permissions, enumerate accessible resources using iam:List* and iam:Get* calls. Escalate by attaching new policies, creating access keys for other users, assuming cross-account roles, or invoking iam:CreatePolicyVersion to grant full admin access.",
+    "detection_indicators": [
+      "IAM policies with Effect:Allow, Action:*, Resource:*",
+      "Roles with more than 10 attached policies",
+      "IAM Access Analyzer findings showing unused permissions",
+      "CloudTrail showing CreatePolicyVersion or AttachUserPolicy from non-admin principals",
+      "iam:PassRole permissions without resource constraints"
+    ],
+    "remediation": "Implement least-privilege using IAM Access Analyzer to right-size permissions. Use Service Control Policies (SCPs) to set permission boundaries. Enable IAM Access Analyzer for continuous monitoring. Require MFA for privileged actions. Use permission boundaries on all roles to cap maximum permissions."
+  },
+  {
+    "id": "CLOUD-004",
+    "name": "Exposed Service Account Keys",
+    "provider": "GCP",
+    "category": "secrets",
+    "severity": "critical",
+    "description": "GCP service account JSON key files committed to source code repositories, stored in publicly accessible locations, or left in container images, providing persistent authentication that bypasses MFA and audit controls.",
+    "attack_vector": "Scan public GitHub repositories, Docker images, or CI/CD artifacts for service account JSON key files. Use the private key to authenticate as the service account and access all resources its IAM bindings permit, including cross-project access via impersonation chains.",
+    "detection_indicators": [
+      "Service account keys older than 90 days without rotation",
+      "Multiple active keys for a single service account",
+      "GCP Admin Activity logs showing authentication from unexpected geographic regions",
+      "Data Access logs indicating bulk export operations from service account identity",
+      "Key files detected in version control via secret scanning tools"
+    ],
+    "remediation": "Disable service account key creation via Organization Policy constraints. Use Workload Identity Federation for external workloads and attached service accounts for GCE/GKE. If keys are required, enforce automated rotation within 30 days and monitor with Security Command Center. Scan all repositories for leaked keys and revoke immediately."
+  },
+  {
+    "id": "CLOUD-005",
+    "name": "Public EBS Snapshots and AMIs",
+    "provider": "AWS",
+    "category": "storage",
+    "severity": "high",
+    "description": "EBS snapshots or custom AMIs shared publicly or with unintended AWS accounts, exposing sensitive data including application code, configuration files, database dumps, and embedded credentials.",
+    "attack_vector": "Use the AWS API to list publicly available snapshots filtered by account ID. Create volumes from public snapshots in the attacker's account and mount them to extract data. For public AMIs, launch instances and inspect the filesystem for secrets, SSH keys, and application data.",
+    "detection_indicators": [
+      "ModifySnapshotAttribute or ModifyImageAttribute calls setting launch permissions to 'all'",
+      "EBS snapshots with createVolumePermission granted to external accounts",
+      "AWS Config rule ec2-ebs-snapshot-public-restorable-check failing",
+      "AMIs with launchPermission set to public",
+      "Snapshots created from volumes attached to production instances shared externally"
+    ],
+    "remediation": "Enable the EC2 Block Public Access for AMIs and snapshots at the account level. Use AWS Config rules to detect and auto-remediate public sharing. Encrypt all EBS volumes with customer-managed KMS keys (shared snapshots require key access). Audit snapshot permissions via AWS CLI: aws ec2 describe-snapshot-attribute."
+  },
+  {
+    "id": "CLOUD-006",
+    "name": "Insecure Lambda Environment Variables",
+    "provider": "AWS",
+    "category": "secrets",
+    "severity": "high",
+    "description": "Sensitive credentials (API keys, database passwords, tokens) stored as plaintext environment variables in AWS Lambda functions, accessible to anyone with lambda:GetFunctionConfiguration permissions and visible in CloudFormation/Terraform state files.",
+    "attack_vector": "Enumerate Lambda functions using lambda:ListFunctions, then call lambda:GetFunctionConfiguration to retrieve all environment variables in plaintext. Alternatively, access deployment state files (tfstate, CloudFormation templates) that contain the plaintext values. Compromised credentials enable lateral movement to connected services.",
+    "detection_indicators": [
+      "Lambda environment variables containing strings matching API key or password patterns",
+      "CloudTrail GetFunctionConfiguration calls from unauthorized principals",
+      "Terraform state files in S3 containing Lambda environment variable values",
+      "Lambda functions with environment variables not encrypted with a customer KMS key",
+      "IAM policies granting lambda:GetFunction* to broad principals"
+    ],
+    "remediation": "Store secrets in AWS Secrets Manager or SSM Parameter Store (SecureString) and grant Lambda execution role access via IAM. Enable Lambda environment variable encryption with customer-managed KMS key. Restrict lambda:GetFunctionConfiguration via IAM policies. Rotate all secrets that were previously stored as plaintext environment variables."
+  },
+  {
+    "id": "CLOUD-007",
+    "name": "Azure Storage Account SAS Token Abuse",
+    "provider": "Azure",
+    "category": "storage",
+    "severity": "high",
+    "description": "Shared Access Signature (SAS) tokens with overly broad permissions, long expiry times, or account-level scope that grant persistent unauthorized access to Azure Storage resources even after the generating credential is rotated.",
+    "attack_vector": "Extract SAS tokens from application source code, client-side JavaScript, URL parameters, or network traffic. Account-level SAS tokens signed with the storage account key provide full access to all containers and blobs. Since SAS tokens are self-contained, they remain valid until expiry regardless of key rotation (unless the signing key itself is regenerated).",
+    "detection_indicators": [
+      "SAS tokens with expiry exceeding 24 hours in application code",
+      "Account-level SAS tokens (ss=bfqt) with full permissions (sp=rwdlacup)",
+      "Storage Analytics logs showing SAS-authenticated requests from unexpected IPs",
+      "SAS tokens lacking IP restriction (sip parameter) or HTTPS requirement (spr=https)",
+      "Diagnostic settings showing anomalous data volume from SAS-authenticated operations"
+    ],
+    "remediation": "Use short-lived service-level SAS tokens (< 1 hour) with minimum required permissions. Implement stored access policies to enable revocation. Restrict SAS by IP range and HTTPS-only. Prefer Azure AD authentication over SAS where possible. Regenerate storage account keys to invalidate all outstanding account-level SAS tokens."
+  },
+  {
+    "id": "CLOUD-008",
+    "name": "Kubernetes RBAC Privilege Escalation",
+    "provider": "Multi",
+    "category": "iam",
+    "severity": "critical",
+    "description": "Overly permissive Kubernetes RBAC configurations allowing pod escape, secret access, or cluster-admin escalation through bind/escalate verbs, wildcard permissions, or service account token abuse in managed Kubernetes services (EKS, GKE, AKS).",
+    "attack_vector": "Compromise a pod with a mounted service account token. Use RBAC misconfigurations (create pods, create role bindings, access secrets, or exec into other pods) to escalate privileges. Create a privileged pod with hostPID/hostNetwork to access the node, then pivot to the cloud provider metadata service or cluster credentials.",
+    "detection_indicators": [
+      "ClusterRoleBindings granting cluster-admin to non-system service accounts",
+      "RBAC rules with verbs: ['*'] or resources: ['*'] on non-admin roles",
+      "Roles granting 'create' on pods/deployments combined with privileged securityContext",
+      "Audit logs showing escalate or bind verb usage",
+      "Service accounts with automountServiceAccountToken not disabled"
+    ],
+    "remediation": "Apply least-privilege RBAC with namespace-scoped Roles instead of ClusterRoles where possible. Disable automountServiceAccountToken on pods that do not need API access. Use PodSecurity admission to prevent privileged containers. Audit RBAC with tools like rbac-lookup or kubectl-who-can. Implement OPA Gatekeeper policies to restrict escalation paths."
+  },
+  {
+    "id": "CLOUD-009",
+    "name": "Cross-Account IAM Role Chaining",
+    "provider": "AWS",
+    "category": "iam",
+    "severity": "high",
+    "description": "Exploit trust relationships between AWS accounts to chain AssumeRole calls across multiple accounts, traversing from a low-privilege entry point to high-privilege access in a target account through transitive trust.",
+    "attack_vector": "Map cross-account role trust policies using iam:GetRole on roles with permissive trust (Principal: '*' or broad account IDs with no ExternalId/MFA conditions). Chain AssumeRole from Account A to B to C, accumulating permissions at each hop until reaching a role with administrative access in the target account.",
+    "detection_indicators": [
+      "Role trust policies with Principal set to root of external accounts without conditions",
+      "Cross-account AssumeRole calls from previously unseen source accounts in CloudTrail",
+      "Roles with sts:AssumeRole permission on Resource: '*'",
+      "Missing ExternalId or MFA conditions in cross-account trust policies",
+      "Chained AssumeRole events within short time windows (< 5 minutes) in CloudTrail"
+    ],
+    "remediation": "Require ExternalId in all cross-account role trust policies. Enforce MFA conditions for human-assumed roles. Limit sts:AssumeRole permissions to specific role ARNs. Use AWS Organizations SCPs to restrict which accounts can establish trust relationships. Monitor AssumeRole chains via CloudTrail and alert on unexpected cross-account access patterns."
+  },
+  {
+    "id": "CLOUD-010",
+    "name": "GCP Metadata API Token Theft",
+    "provider": "GCP",
+    "category": "compute",
+    "severity": "critical",
+    "description": "Exploit SSRF or compromised workloads on GCE/GKE to query the GCP metadata server at metadata.google.internal (169.254.169.254) and steal OAuth2 access tokens for the attached service account, enabling impersonation and lateral movement across GCP services.",
+    "attack_vector": "Issue a GET request to http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token with the Metadata-Flavor: Google header. The returned access token provides full permissions of the attached service account. Use the token to access Cloud Storage, BigQuery, Secret Manager, or other GCP APIs.",
+    "detection_indicators": [
+      "VPC Flow Logs showing HTTP requests to 169.254.169.254 from application containers",
+      "Cloud Audit Logs showing API calls from a service account access token with unexpected user-agent strings",
+      "Metadata server access logs indicating repeated token endpoint queries",
+      "Data Access audit logs showing resource access from compute instance service account in unexpected projects",
+      "Workload Identity unused but default compute service account still attached with broad roles"
+    ],
+    "remediation": "Use Workload Identity on GKE to bind Kubernetes service accounts to specific GCP service accounts with minimal permissions. Block metadata server access from pods using network policies. Set custom metadata headers and use metadata concealment for GKE nodes. Remove default compute service account and attach purpose-specific service accounts with least-privilege IAM roles."
+  }
+]
