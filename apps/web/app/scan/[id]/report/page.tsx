@@ -345,8 +345,12 @@ export default function ReportPage({ params }: { params: Promise<{ id: string }>
                   FIX
                 </span>
               )}
-              <span className="text-xs text-[var(--color-text-dim)]">
-                {vuln.vuln_class} | {(vuln.confidence * 100).toFixed(0)}%
+              <span className={`text-xs ${
+                vuln.confidence >= 0.8 ? "text-red-400" :
+                vuln.confidence >= 0.6 ? "text-orange-400" :
+                "text-[var(--color-text-dim)]"
+              }`}>
+                {vuln.vuln_class} | {(vuln.confidence * 100).toFixed(0)}% conf
               </span>
               <span className="text-[var(--color-text-dim)]">
                 {expanded === vuln.id ? "▼" : "▶"}

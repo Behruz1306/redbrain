@@ -117,25 +117,29 @@ class TheHogClient:
         }
 
     def _offline_threat_intel(self, query: str) -> list[dict[str, Any]]:
-        """Provide curated threat intelligence when API is unavailable."""
+        """Provide curated threat intelligence when API is unavailable.
+
+        Note: These are general security advisories based on public data,
+        not real-time signals. Live data requires The Hog API connection.
+        """
         intel_db = {
             "sql injection": [
-                {"source": "OWASP", "signal": "SQL injection remains #3 in OWASP Top 10 2025", "severity": "high"},
-                {"source": "CVE-DB", "signal": "2,847 new SQLi CVEs published in 2025-2026", "severity": "high"},
+                {"source": "OWASP", "signal": "SQL injection is A03:2021 Injection in OWASP Top 10", "severity": "high"},
+                {"source": "CWE", "signal": "CWE-89: SQL Injection — consistently in CWE Top 25 Most Dangerous Weaknesses", "severity": "high"},
             ],
             "xss": [
-                {"source": "OWASP", "signal": "Cross-Site Scripting is #7 in OWASP Top 10 2025", "severity": "medium"},
-                {"source": "HackerOne", "signal": "XSS accounts for 18% of all bug bounty reports", "severity": "medium"},
+                {"source": "OWASP", "signal": "XSS falls under A03:2021 Injection in OWASP Top 10", "severity": "medium"},
+                {"source": "CWE", "signal": "CWE-79: Cross-site Scripting — a top reported vulnerability class on bug bounty platforms", "severity": "medium"},
             ],
             "authentication": [
-                {"source": "OWASP", "signal": "Broken Authentication is #7 in OWASP Top 10 2025", "severity": "high"},
-                {"source": "Verizon DBIR", "signal": "61% of breaches involve stolen credentials", "severity": "critical"},
+                {"source": "OWASP", "signal": "A07:2021 Identification and Authentication Failures in OWASP Top 10", "severity": "high"},
+                {"source": "CWE", "signal": "CWE-287: Improper Authentication — credential attacks remain a leading breach vector", "severity": "critical"},
             ],
             "idor": [
-                {"source": "HackerOne", "signal": "IDOR is the #1 most reported bug bounty vulnerability class", "severity": "high"},
+                {"source": "OWASP", "signal": "A01:2021 Broken Access Control — #1 in OWASP Top 10", "severity": "high"},
             ],
             "default credentials": [
-                {"source": "CISA", "signal": "Default credentials listed as top initial access vector", "severity": "critical"},
+                {"source": "CWE", "signal": "CWE-798: Use of Hard-coded Credentials — listed in CWE Top 25", "severity": "critical"},
             ],
         }
 

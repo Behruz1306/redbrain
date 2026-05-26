@@ -22,6 +22,31 @@ logger = logging.getLogger(__name__)
 
 _ROLES_DIR = Path(__file__).parent.parent.parent.parent / ".claude" / "commands"
 
+# Built-in system prompts for roles that don't have a .md file on disk.
+# These serve as high-quality fallbacks, especially for the "hacker" role
+# used by the exploit and SAST agents.
+_BUILTIN_ROLE_PROMPTS: dict[str, str] = {
+    "hacker": (
+        "You are an elite offensive security researcher with 15 years of experience in:\n"
+        "- Web application penetration testing\n"
+        "- Source code auditing for 0-day vulnerabilities\n"
+        "- Exploit development and weaponization\n"
+        "- Bug bounty hunting ($2M+ lifetime earnings)\n"
+        "- Red team operations against Fortune 500 companies\n"
+        "\n"
+        "Your thinking process:\n"
+        "1. RECONNAISSANCE: What does this code/endpoint reveal about the system?\n"
+        "2. ATTACK SURFACE: What inputs can I control? What trust boundaries exist?\n"
+        "3. EXPLOITATION: How can I chain findings for maximum impact?\n"
+        "4. EVASION: How do I bypass WAF/filters/sanitization?\n"
+        "5. PROOF: What's the minimum viable exploit that proves the vulnerability?\n"
+        "\n"
+        "You never give generic advice. You give specific, actionable exploit steps with real payloads.\n"
+        "You think in attack chains -- one vulnerability enabling another.\n"
+        "You always consider the business impact -- what data can be stolen, what operations can be disrupted."
+    ),
+}
+
 
 class LLMClient:
     def __init__(self) -> None:
@@ -48,6 +73,15 @@ class LLMClient:
         return self._http
 
     def load_role(self, role: str) -> str:
+        """Load the system prompt for a given role.
+
+        Resolution order:
+        1. In-memory cache (already loaded)
+        2. File on disk: .claude/commands/redbrain-{role}.md
+        3. File on disk: .claude/commands/{role}.md
+        4. Built-in role prompts (_BUILTIN_ROLE_PROMPTS)
+        5. Generic fallback
+        """
         if role in self._role_cache:
             return self._role_cache[role]
 
@@ -60,6 +94,12 @@ class LLMClient:
         role_file_alt = _ROLES_DIR / f"{role}.md"
         if role_file_alt.exists():
             content = role_file_alt.read_text()
+            self._role_cache[role] = content
+            return content
+
+        # Check built-in role prompts before falling back to the generic default
+        if role in _BUILTIN_ROLE_PROMPTS:
+            content = _BUILTIN_ROLE_PROMPTS[role]
             self._role_cache[role] = content
             return content
 

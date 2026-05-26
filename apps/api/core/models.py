@@ -77,6 +77,7 @@ class FunctionInfo(BaseModel):
     source_code: str
     parameters: list[str] = Field(default_factory=list)
     risk_signals: list[str] = Field(default_factory=list)
+    risk_confidences: dict[str, float] = Field(default_factory=dict)
     cve_matches: list[CVEMatch] = Field(default_factory=list)
 
 
@@ -119,6 +120,7 @@ class ExploitResult(BaseModel):
     proof: str = ""
     repro_curl: str = ""
     success: bool = False
+    confidence: float = 0.0
 
 
 class Correlation(BaseModel):

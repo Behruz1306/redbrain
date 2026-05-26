@@ -21,14 +21,23 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install system deps
+# Install system deps (including nmap for port scanning)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     nginx \
     nodejs \
     npm \
+    nmap \
+    unzip \
+    curl \
     supervisor \
     && rm -rf /var/lib/apt/lists/*
+
+# Install nuclei (ProjectDiscovery vulnerability scanner)
+# Using the install script which auto-detects platform and latest release
+RUN curl -sL https://raw.githubusercontent.com/projectdiscovery/nuclei/main/scripts/install.sh | sh \
+    && mv nuclei /usr/local/bin/ 2>/dev/null || true \
+    && nuclei -update-templates 2>/dev/null || true
 
 # Install Python deps
 COPY pyproject.toml .

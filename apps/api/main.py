@@ -87,6 +87,12 @@ async def get_report(scan_id: str) -> dict[str, Any]:
     med = sum(1 for v in vulns if v.severity == Severity.MEDIUM)
     low = sum(1 for v in vulns if v.severity == Severity.LOW)
 
+    # Only count high-confidence findings for bounty estimate
+    confirmed_vulns = [v for v in vulns if v.confidence >= 0.7]
+    confirmed_crit = sum(1 for v in confirmed_vulns if v.severity == Severity.CRITICAL)
+    confirmed_high = sum(1 for v in confirmed_vulns if v.severity == Severity.HIGH)
+    confirmed_med = sum(1 for v in confirmed_vulns if v.severity == Severity.MEDIUM)
+
     return {
         "vulnerabilities": [v.model_dump() for v in vulns],
         "report_markdown": result.get("report_markdown", ""),
@@ -96,7 +102,8 @@ async def get_report(scan_id: str) -> dict[str, Any]:
             "high": high,
             "medium": med,
             "low": low,
-            "bounty_value": crit * 3000 + high * 1500 + med * 500 + low * 100,
+            "confirmed": len(confirmed_vulns),
+            "bounty_value": confirmed_crit * 3000 + confirmed_high * 1500 + confirmed_med * 500,
         },
         "risk_score": result.get("risk_score", {}),
         "attack_chains": result.get("attack_chains", []),

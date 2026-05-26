@@ -25,8 +25,13 @@ class PythonParser(BaseParser):
                     arg.arg for arg in node.args.args
                     if arg.arg != "self" and arg.arg != "cls"
                 ]
-                start_line = node.lineno
-                end_line = node.end_lineno or start_line
+                # Include decorators in the captured source (they appear before the def line)
+                if node.decorator_list:
+                    first_decorator_line = min(d.lineno for d in node.decorator_list)
+                    start_line = first_decorator_line
+                else:
+                    start_line = node.lineno
+                end_line = node.end_lineno or node.lineno
                 func_source = "\n".join(lines[start_line - 1:end_line])
 
                 functions.append(ParsedFunction(

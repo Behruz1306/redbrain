@@ -137,16 +137,34 @@ class ScanOrchestrator:
             }
             for func in sast_result:
                 for signal in func.risk_signals:
+                    # Use detector confidence to set vulnerability confidence
+                    detector_confidence = func.risk_confidences.get(signal, 0.5)
+
+                    # Skip very low confidence findings
+                    if detector_confidence < 0.4:
+                        continue
+
                     vuln_class = class_map.get(signal, VulnClass.INFO_DISCLOSURE)
-                    sev = severity_map.get(signal, Severity.MEDIUM)
+                    base_sev = severity_map.get(signal, Severity.MEDIUM)
+
+                    # Downgrade severity for low-confidence detections
+                    sev = base_sev
+                    if detector_confidence < 0.5:
+                        if base_sev == Severity.CRITICAL:
+                            sev = Severity.HIGH
+                        elif base_sev == Severity.HIGH:
+                            sev = Severity.MEDIUM
+                        elif base_sev == Severity.MEDIUM:
+                            sev = Severity.LOW
+
                     vuln = Vulnerability(
                         vuln_class=vuln_class,
                         severity=sev,
                         status=VulnStatus.SUSPECTED,
-                        confidence=0.7,
+                        confidence=round(detector_confidence, 2),
                         function_id=func.id,
                         title=f"{signal.replace('_', ' ').title()} in {func.name}",
-                        description=f"Detected {signal} pattern in {func.file_path}:{func.line}",
+                        description=f"Detected {signal} pattern in {func.file_path}:{func.line} (confidence: {detector_confidence:.0%})",
                     )
                     vulnerabilities.append(vuln)
 

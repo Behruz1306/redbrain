@@ -11,21 +11,74 @@ PATH_JOIN_USER = re.compile(
 DOWNLOAD_ROUTE = re.compile(
     r"(?:download|sendFile|send_file|serve_file)\s*\([^)]*(?:req\.|request\.|params\.|query\.)",
 )
-NO_SANITIZE = re.compile(
-    r"(?:readFile|createReadStream|open)\s*\([^)]*(?:\.\.|\%2e)",
-)
 STATIC_SERVE_DYNAMIC = re.compile(
     r"(?:express\.static|send|sendFile)\s*\([^)]*(?:\+|`\$\{)",
 )
+USER_INPUT = re.compile(
+    r"(?:req\.|request\.|params\.|query\.|body\.|args\.)",
+    re.IGNORECASE,
+)
+
+# --- Safe-pattern exclusions ---
+BASENAME_SANITIZED = re.compile(
+    r"(?:path\.basename|os\.path\.basename|basename)\s*\(",
+    re.IGNORECASE,
+)
+RESOLVE_STARTSWITH = re.compile(
+    r"(?:startsWith|startswith|\.indexOf\s*\(\s*(?:baseDir|base_dir|root|upload|allowed))\s*",
+    re.IGNORECASE,
+)
+STATIC_CONSTANT_PATH = re.compile(
+    r"(?:express\.static|serve_static|sendFile|send_file)\s*\(\s*['\"][^'\"]*['\"]",
+)
+PATH_VALIDATION = re.compile(
+    r"(?:\.\.\/|\.\.\\\\|path\.normalize|realpath|path\.resolve.*startsWith"
+    r"|includes\s*\(\s*['\"]\.\.['\"]\s*\)"
+    r"|\.replace\s*\([^)]*\.\.|sanitize[_-]?path|safe[_-]?path|clean[_-]?path)",
+    re.IGNORECASE,
+)
 
 
-def detect(source: str) -> bool:
+def detect(source: str) -> float:
+    # Static file serving with constant paths is safe
+    if STATIC_CONSTANT_PATH.search(source) and not USER_INPUT.search(source):
+        return 0.0
+
+    # basename sanitization: user input goes through path.basename
+    has_basename = BASENAME_SANITIZED.search(source)
+
+    # resolve + startsWith check
+    has_resolve_check = RESOLVE_STARTSWITH.search(source)
+
+    # General path validation
+    has_validation = PATH_VALIDATION.search(source)
+
+    is_sanitized = has_basename or (has_resolve_check and has_validation)
+
+    # Direct file read with user input
     if FILE_FROM_USER.search(source):
-        return True
+        if is_sanitized:
+            return 0.2
+        return 0.9
+
+    # path.join with user input but validation nearby
     if PATH_JOIN_USER.search(source):
-        return True
+        if is_sanitized:
+            return 0.2
+        if has_resolve_check or has_validation:
+            return 0.4
+        return 0.7
+
+    # Download/sendFile route with user input
     if DOWNLOAD_ROUTE.search(source):
-        return True
+        if is_sanitized:
+            return 0.2
+        return 0.8
+
+    # Dynamic static serve
     if STATIC_SERVE_DYNAMIC.search(source):
-        return True
-    return False
+        if is_sanitized:
+            return 0.2
+        return 0.6
+
+    return 0.0

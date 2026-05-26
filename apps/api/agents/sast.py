@@ -118,7 +118,7 @@ class SASTAgent:
 
                 parsed = parser.parse_file(rel_path, source)
                 for func in parsed:
-                    signals = self._detect_patterns(func.source_code)
+                    signals, confidences = self._detect_patterns(func.source_code)
                     func_info = FunctionInfo(
                         file_path=rel_path,
                         name=func.name,
@@ -126,6 +126,7 @@ class SASTAgent:
                         source_code=func.source_code,
                         parameters=func.parameters,
                         risk_signals=signals,
+                        risk_confidences=confidences,
                     )
                     self.functions.append(func_info)
 
@@ -136,6 +137,7 @@ class SASTAgent:
                             "file": rel_path,
                             "line": func.line,
                             "risk_signals": signals,
+                            "risk_confidences": confidences,
                         })
         finally:
             import shutil
@@ -191,38 +193,70 @@ class SASTAgent:
             return self.py_parser
         return None
 
-    def _detect_patterns(self, source: str) -> list[str]:
-        signals = []
+    def _detect_patterns(self, source: str) -> tuple[list[str], dict[str, float]]:
+        """Run all detectors and return signals with confidence >= 0.4.
+
+        Returns:
+            Tuple of (signal_names, confidences_dict) where confidences_dict
+            maps signal name to its confidence score (0.0-1.0).
+        """
+        signals: list[str] = []
+        confidences: dict[str, float] = {}
         for name, detect_fn in DETECTORS:
-            if detect_fn(source):
+            confidence = detect_fn(source)
+            if confidence >= 0.4:
                 signals.append(name)
-        return signals
+                confidences[name] = round(confidence, 2)
+        return signals, confidences
 
     async def _ai_validate(self, high_risk: list[FunctionInfo]) -> None:
-        """Use LLM to validate whether detected patterns are real vulnerabilities."""
+        """Use LLM to validate whether detected patterns are real exploitable vulnerabilities.
+
+        The prompt is written from an attacker's perspective -- it asks the
+        LLM to think like a bug bounty hunter trying to actually exploit
+        the code, not just pattern-match on keywords.
+        """
         for func in high_risk:
             try:
                 prompt = (
-                    f"Analyze this function for security vulnerabilities.\n"
+                    f"You are a bug bounty hunter reviewing this code for a live target. "
+                    f"Your payout depends on finding REAL, EXPLOITABLE vulnerabilities -- "
+                    f"false positives waste your time and hurt your reputation.\n\n"
                     f"Function: {func.name}\n"
                     f"File: {func.file_path}\n"
-                    f"Detected signals: {func.risk_signals}\n"
-                    f"Code:\n```\n{func.source_code[:600]}\n```\n\n"
-                    f"In 1 sentence: Is this a real exploitable vulnerability or a false positive? "
-                    f"Rate confidence 0-100."
+                    f"Automated scanner flagged: {func.risk_signals}\n"
+                    f"Code:\n```\n{func.source_code[:800]}\n```\n\n"
+                    f"Answer these questions as an attacker:\n"
+                    f"1. EXPLOITATION PATH: Can you trace a concrete path from user input to the "
+                    f"dangerous sink? What exact input would you send?\n"
+                    f"2. BYPASSES NEEDED: Are there sanitizers, WAFs, or type checks in the way? "
+                    f"Can you bypass them?\n"
+                    f"3. REAL-WORLD IMPACT: If exploited, what's the worst-case business impact? "
+                    f"(data theft, RCE, account takeover, etc.)\n"
+                    f"4. PROOF-OF-CONCEPT: Write a minimal PoC payload that would prove this "
+                    f"vulnerability exists.\n"
+                    f"5. VERDICT: Is this a real exploitable bug (with confidence 0-100) or a "
+                    f"false positive? Rate severity by real-world impact, not just pattern presence.\n\n"
+                    f"Be brutally honest. If the scanner is wrong, say so. If it's right, explain "
+                    f"exactly how an attacker would exploit it."
                 )
-                response = await llm.ask("sast", prompt, max_tokens=100)
+                response = await llm.ask("hacker", prompt, max_tokens=500)
                 if response and "offline" not in response:
                     await event_bus.emit(self.scan_id, "ai:sast_validation", {
                         "function": func.name,
                         "signals": func.risk_signals,
-                        "ai_assessment": response.strip()[:200],
+                        "ai_assessment": response.strip()[:500],
                     })
             except Exception:
                 continue
 
     async def _ai_deep_analysis(self) -> None:
-        """Use LLM to find complex vulnerabilities that regex detectors miss."""
+        """Use LLM in 'hacker' role to find complex vulnerabilities that regex detectors miss.
+
+        This phase uses an adversarial mindset -- the LLM is prompted to
+        think like an attacker hunting for logic bugs, race conditions,
+        and subtle auth flaws that no regex can catch.
+        """
         candidates = [f for f in self.functions if not f.risk_signals]
         interesting = [
             f for f in candidates
@@ -242,20 +276,29 @@ class SASTAgent:
         for func in batch:
             try:
                 prompt = (
-                    f"You are an elite security researcher. Analyze this function for complex vulnerabilities "
-                    f"that automated scanners miss.\n\n"
+                    f"You are hunting for bugs in a live bug bounty program. The automated scanners "
+                    f"already ran and found NOTHING in this function -- but you suspect they missed "
+                    f"something subtle. Your job is to find what the machines cannot.\n\n"
                     f"Function: {func.name}\nFile: {func.file_path}\nLine: {func.line}\n"
                     f"Code:\n```\n{func.source_code[:800]}\n```\n\n"
-                    f"Look specifically for:\n"
-                    f"1. Race conditions (TOCTOU, check-then-act without locks)\n"
-                    f"2. Business logic flaws (negative amounts, skipped steps, privilege escalation)\n"
-                    f"3. Insecure authentication (weak comparison, timing attacks, token prediction)\n"
-                    f"4. Authorization bypass (missing role checks, IDOR patterns)\n"
-                    f"5. Cryptographic issues (weak algorithms, predictable IVs, static keys)\n"
-                    f"6. Injection via complex data flows (second-order, serialization)\n\n"
-                    f"Respond with JSON: {{\"vulnerable\": true/false, \"signals\": [\"signal_name\"], \"confidence\": 0-100, \"description\": \"...\"}}"
+                    f"Think like an attacker. For each category, explain what you'd try:\n\n"
+                    f"1. RACE CONDITIONS: Is there a TOCTOU gap? Can I hit this endpoint 100x "
+                    f"concurrently and get double-spend, duplicate records, or inconsistent state?\n"
+                    f"2. BUSINESS LOGIC: Can I send negative amounts, skip validation steps, "
+                    f"escalate privileges, or abuse the intended workflow?\n"
+                    f"3. AUTH/AUTHZ FLAWS: Is there a missing role check? Can I access other "
+                    f"users' data by manipulating IDs? Are tokens predictable or reusable?\n"
+                    f"4. CRYPTO WEAKNESSES: Weak algorithms? Hardcoded keys? Predictable IVs? "
+                    f"Missing signature verification? Timing side-channels in comparison?\n"
+                    f"5. SECOND-ORDER INJECTION: Does this function store data that gets "
+                    f"unsafely used later? Can I inject through a non-obvious data flow?\n"
+                    f"6. MASS ASSIGNMENT: Can I set fields I shouldn't (isAdmin, role, price) "
+                    f"by adding extra properties to a request body?\n\n"
+                    f"For any vulnerability found, provide a concrete proof-of-concept.\n\n"
+                    f"Respond with JSON: {{\"vulnerable\": true/false, \"signals\": [\"signal_name\"], "
+                    f"\"confidence\": 0-100, \"description\": \"...\", \"poc\": \"curl or code snippet\"}}"
                 )
-                result = await llm.ask_json("sast", prompt)
+                result = await llm.ask_json("hacker", prompt)
 
                 if result.get("vulnerable") and result.get("confidence", 0) >= 60:
                     signals = result.get("signals", ["ai_detected_complex_vuln"])
@@ -265,7 +308,8 @@ class SASTAgent:
                         "file": func.file_path,
                         "signals": signals,
                         "confidence": result.get("confidence"),
-                        "description": result.get("description", "")[:200],
+                        "description": result.get("description", "")[:300],
+                        "poc": result.get("poc", "")[:200],
                     })
             except Exception:
                 continue
