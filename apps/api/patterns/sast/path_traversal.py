@@ -39,10 +39,18 @@ PATH_VALIDATION = re.compile(
 )
 
 
+FRAMEWORK_INDICATORS = re.compile(
+    r"(?:module\.exports|exports\.\w+\s*=|prototype\.\w+\s*=|@internal|@private|@api\s+private)",
+)
+
+
 def detect(source: str) -> float:
     # Static file serving with constant paths is safe
     if STATIC_CONSTANT_PATH.search(source) and not USER_INPUT.search(source):
         return 0.0
+
+    # Framework/library code (not app code) — reduce severity
+    is_framework = bool(FRAMEWORK_INDICATORS.search(source))
 
     # basename sanitization: user input goes through path.basename
     has_basename = BASENAME_SANITIZED.search(source)
@@ -58,27 +66,31 @@ def detect(source: str) -> float:
     # Direct file read with user input
     if FILE_FROM_USER.search(source):
         if is_sanitized:
-            return 0.2
-        return 0.9
+            return 0.1
+        base = 0.9
+        return max(0.3, base - 0.3) if is_framework else base
 
     # path.join with user input but validation nearby
     if PATH_JOIN_USER.search(source):
         if is_sanitized:
-            return 0.2
+            return 0.1
         if has_resolve_check or has_validation:
-            return 0.4
-        return 0.7
+            return 0.2 if is_framework else 0.4
+        base = 0.7
+        return max(0.3, base - 0.3) if is_framework else base
 
     # Download/sendFile route with user input
     if DOWNLOAD_ROUTE.search(source):
         if is_sanitized:
-            return 0.2
-        return 0.8
+            return 0.1
+        base = 0.8
+        return max(0.3, base - 0.3) if is_framework else base
 
     # Dynamic static serve
     if STATIC_SERVE_DYNAMIC.search(source):
         if is_sanitized:
-            return 0.2
-        return 0.6
+            return 0.1
+        base = 0.6
+        return max(0.3, base - 0.3) if is_framework else base
 
     return 0.0

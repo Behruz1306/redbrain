@@ -42,11 +42,31 @@ ROUTER_USE_AUTH = re.compile(
 )
 
 
+FRAMEWORK_INDICATORS = re.compile(
+    r"(?:module\.exports|exports\.\w+\s*=|prototype\.\w+\s*=|@internal|@private"
+    r"|@api\s+private|app\.lazyrouter|this\.request|this\.response)",
+)
+# Test/example files
+TEST_INDICATORS = re.compile(
+    r"(?:describe\s*\(|it\s*\(|test\s*\(|expect\s*\(|assert\.|should\.|@test|unittest"
+    r"|example|demo|sample|tutorial)",
+    re.IGNORECASE,
+)
+
+
 def detect(source: str) -> float:
     if not ROUTE_DEF.search(source):
         return 0.0
 
     if not SENSITIVE_PATHS.search(source):
+        return 0.0
+
+    # Framework/library internals — not app code
+    if FRAMEWORK_INDICATORS.search(source):
+        return 0.0
+
+    # Test/example code
+    if TEST_INDICATORS.search(source):
         return 0.0
 
     # If global auth middleware is applied to the router, skip
@@ -68,4 +88,4 @@ def detect(source: str) -> float:
         return 0.7
 
     # Other sensitive routes without auth
-    return 0.4
+    return 0.5

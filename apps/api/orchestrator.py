@@ -140,8 +140,8 @@ class ScanOrchestrator:
                     # Use detector confidence to set vulnerability confidence
                     detector_confidence = func.risk_confidences.get(signal, 0.5)
 
-                    # Skip very low confidence findings
-                    if detector_confidence < 0.4:
+                    # Skip low confidence findings — only report >=50% confidence
+                    if detector_confidence < 0.5:
                         continue
 
                     vuln_class = class_map.get(signal, VulnClass.INFO_DISCLOSURE)

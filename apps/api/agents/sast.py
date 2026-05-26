@@ -194,7 +194,7 @@ class SASTAgent:
         return None
 
     def _detect_patterns(self, source: str) -> tuple[list[str], dict[str, float]]:
-        """Run all detectors and return signals with confidence >= 0.4.
+        """Run all detectors and return signals with confidence >= 0.5.
 
         Returns:
             Tuple of (signal_names, confidences_dict) where confidences_dict
@@ -204,7 +204,7 @@ class SASTAgent:
         confidences: dict[str, float] = {}
         for name, detect_fn in DETECTORS:
             confidence = detect_fn(source)
-            if confidence >= 0.4:
+            if confidence >= 0.5:
                 signals.append(name)
                 confidences[name] = round(confidence, 2)
         return signals, confidences
