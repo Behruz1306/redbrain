@@ -78,36 +78,64 @@ async def get_report(scan_id: str) -> dict[str, Any]:
     result = scan_results.get(scan_id)
     if not result:
         return {"vulnerabilities": [], "report_markdown": "", "stats": {
-            "total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "bounty_value": 0
+            "total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "confirmed": 0, "bounty_value": 0
         }, "risk_score": {}, "attack_chains": []}
 
-    vulns = result.get("vulnerabilities", [])
-    crit = sum(1 for v in vulns if v.severity == Severity.CRITICAL)
-    high = sum(1 for v in vulns if v.severity == Severity.HIGH)
-    med = sum(1 for v in vulns if v.severity == Severity.MEDIUM)
-    low = sum(1 for v in vulns if v.severity == Severity.LOW)
+    try:
+        vulns = result.get("vulnerabilities", [])
+        crit = sum(1 for v in vulns if v.severity == Severity.CRITICAL)
+        high = sum(1 for v in vulns if v.severity == Severity.HIGH)
+        med = sum(1 for v in vulns if v.severity == Severity.MEDIUM)
+        low = sum(1 for v in vulns if v.severity == Severity.LOW)
 
-    # Only count high-confidence findings for bounty estimate
-    confirmed_vulns = [v for v in vulns if v.confidence >= 0.7]
-    confirmed_crit = sum(1 for v in confirmed_vulns if v.severity == Severity.CRITICAL)
-    confirmed_high = sum(1 for v in confirmed_vulns if v.severity == Severity.HIGH)
-    confirmed_med = sum(1 for v in confirmed_vulns if v.severity == Severity.MEDIUM)
+        # Only count high-confidence findings for bounty estimate
+        confirmed_vulns = [v for v in vulns if v.confidence >= 0.7]
+        confirmed_crit = sum(1 for v in confirmed_vulns if v.severity == Severity.CRITICAL)
+        confirmed_high = sum(1 for v in confirmed_vulns if v.severity == Severity.HIGH)
+        confirmed_med = sum(1 for v in confirmed_vulns if v.severity == Severity.MEDIUM)
 
-    return {
-        "vulnerabilities": [v.model_dump() for v in vulns],
-        "report_markdown": result.get("report_markdown", ""),
-        "stats": {
-            "total": len(vulns),
-            "critical": crit,
-            "high": high,
-            "medium": med,
-            "low": low,
-            "confirmed": len(confirmed_vulns),
-            "bounty_value": confirmed_crit * 3000 + confirmed_high * 1500 + confirmed_med * 500,
-        },
-        "risk_score": result.get("risk_score", {}),
-        "attack_chains": result.get("attack_chains", []),
-    }
+        # Serialize vulnerabilities safely
+        vuln_dicts = []
+        for v in vulns:
+            try:
+                vuln_dicts.append(v.model_dump())
+            except Exception:
+                vuln_dicts.append({
+                    "id": getattr(v, "id", ""),
+                    "vuln_class": str(getattr(v, "vuln_class", "")),
+                    "severity": str(getattr(v, "severity", "")),
+                    "status": str(getattr(v, "status", "")),
+                    "confidence": getattr(v, "confidence", 0),
+                    "title": getattr(v, "title", ""),
+                    "description": getattr(v, "description", ""),
+                })
+
+        return {
+            "vulnerabilities": vuln_dicts,
+            "report_markdown": result.get("report_markdown", ""),
+            "stats": {
+                "total": len(vulns),
+                "critical": crit,
+                "high": high,
+                "medium": med,
+                "low": low,
+                "confirmed": len(confirmed_vulns),
+                "bounty_value": confirmed_crit * 3000 + confirmed_high * 1500 + confirmed_med * 500,
+            },
+            "risk_score": result.get("risk_score", {}),
+            "attack_chains": result.get("attack_chains", []),
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "vulnerabilities": [],
+            "report_markdown": f"# Report generation error\n\n{str(e)}",
+            "stats": {"total": 0, "critical": 0, "high": 0, "medium": 0, "low": 0, "confirmed": 0, "bounty_value": 0},
+            "risk_score": {},
+            "attack_chains": [],
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+        }
 
 
 @app.get("/api/scan/{scan_id}/remediate")
